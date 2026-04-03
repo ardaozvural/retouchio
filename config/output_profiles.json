@@ -1,0 +1,24 @@
+{
+  "profiles": {
+    "catalog_4x5_2k": {
+      "imageConfig": {
+        "aspectRatio": "4:5",
+        "imageSize": "2K"
+      },
+      "promptRules": [
+        "Maintain a premium vertical catalog composition suitable for apparel listings.",
+        "Keep exposure even and detail-retentive across face, garment, and accessories."
+      ]
+    },
+    "catalog_square_2k": {
+      "imageConfig": {
+        "aspectRatio": "1:1",
+        "imageSize": "2K"
+      },
+      "promptRules": [
+        "Maintain a centered square catalog composition without cropping important garment details.",
+        "Protect edge cleanliness so the subject remains easy to mask or repurpose in commerce workflows."
+      ]
+    }
+  }
+}

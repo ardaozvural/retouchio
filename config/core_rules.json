@@ -1,0 +1,36 @@
+{
+  "coreRules": [
+    "Apply the default strict catalog cleanup base. This is a no-redesign pass.",
+    "Keep the garment exactly unchanged: preserve color, texture, pattern, shape, proportions, drape, and construction.",
+    "Keep model identity unchanged: preserve face, body, skin, and hair with no beautification, reshaping, or reinterpretation.",
+    "Replace the background with a seamless off-white studio environment with no visible floor line.",
+    "Remove visual noise, color cast, and amateur studio artifacts.",
+    "Add natural grounding with soft contact shadow under both feet, subtle ambient occlusion near the soles, and a gentle floor gradient.",
+    "The subject must not appear floating.",
+    "Use soft studio lighting with a softbox key and soft fill. Keep color balance neutral and preserve natural skin texture.",
+    "Pose correction is limited: preserve camera angle, body orientation, and framing. Only allow minor professional cleanup such as straighter posture, relaxed shoulders, and subtle stance refinement.",
+    "Do not change pose direction, viewpoint class, or framing family.",
+    "Do not add new objects, props, or accessories in the base cleanup layer.",
+    "Accessory, footwear, headwear, and other styling additions belong to active entity or preset layers, not the base cleanup layer."
+  ],
+  "subjectLockRules": [
+    "Preserve the exact same person: facial structure, skin tone, age impression, body proportions, and hair identity.",
+    "Do not beautify, slim, reshape, or reinterpret the face or body.",
+    "Do not restyle hair beyond minor cleanup of flyaways."
+  ],
+  "subjectReferenceRules": [
+    "Use the supplied subject reference image set as the strict identity lock for all generated outputs.",
+    "When the target image and subject reference differ slightly, prefer the subject reference for identity and the target image for garment and framing."
+  ],
+  "outputRules": [
+    "Return one image only.",
+    "Keep the result suitable for e-commerce catalog use, not editorial styling."
+  ],
+  "failRules": [
+    "The result is invalid if garment details drift or the hemline is shortened.",
+    "The result is invalid if the subject identity changes.",
+    "The result is invalid if the model, garment, or pose is redesigned instead of cleaned up.",
+    "The result is invalid if new props or accessories appear without explicit active entity instructions.",
+    "The result is invalid if studio gear, background artifacts, or floating-foot errors appear."
+  ]
+}

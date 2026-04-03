@@ -1,0 +1,54 @@
+{
+  "module": "headwear",
+  "priority": "high",
+
+  "invariants": [
+    "Headwear must follow the provided reference identity when reference-driven",
+    "Headwear must sit naturally on the head",
+    "Hairline and facial identity must not be distorted",
+    "Garment neckline and primary garment pattern zones must remain visible unless explicitly allowed otherwise",
+    "Headwear must remain realistic and physically believable"
+  ],
+
+  "allowed_transforms": [
+    "Minor scale adaptation for head proportion realism",
+    "Natural fold adaptation consistent with pose",
+    "Subtle lighting adaptation",
+    "Micro shadow adjustments around contact zones"
+  ],
+
+  "forbidden": [
+    "Any identity transfer from reference person to subject",
+    "Any hijab-like reinterpretation unless explicitly requested",
+    "Any occlusion of key garment zones when not allowed",
+    "Any floating or physically implausible placement",
+    "Any stylization that reduces catalog realism"
+  ],
+
+  "placement_rules": [
+    "Accessory must anchor naturally to the head or hair",
+    "No detached or floating edges",
+    "No implausible clipping into skull, forehead, or hair volume",
+    "Back tie or knot behavior must follow the requested styling logic when applicable"
+  ],
+
+  "coverage_rules": [
+    "Do not cover garment neckline unless explicitly allowed",
+    "Do not block primary garment print zones",
+    "Do not hide facial identity-critical regions unless explicitly requested"
+  ],
+
+  "reference_policy": {
+    "source": "headwear_reference",
+    "strictness": "high",
+    "allow_generalization": false,
+    "identity_transfer_forbidden": true
+  },
+
+  "failure_conditions": [
+    "Headwear identity drift detected",
+    "Garment occlusion violation detected",
+    "Unnatural placement detected",
+    "Headwear style reinterpretation detected"
+  ]
+}

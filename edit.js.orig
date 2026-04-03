@@ -1,0 +1,149 @@
+require("dotenv").config();
+const fs = require("fs");
+const path = require("path");
+const { GoogleGenAI } = require("@google/genai");
+
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+
+// ✅ Maliyet/performans default
+const MODEL = "gemini-3.1-flash-image-preview";
+
+// ✅ Sabit çıktı
+const IMAGE_CONFIG = { aspectRatio: "4:5", imageSize: "2K" };
+
+// ✅ Token-optimize prompt (model aksesuarı seçer ama tam 2 adet zorunlu)
+const PROMPT = `
+STRICT CATALOG EDIT (NO REDESIGN)
+
+KEEP EXACT:
+- Garment: identical color/hue, texture, stitching, pattern, shape, proportions. No smoothing/detail loss.
+- Model: same identity (face/body/skin/hair). No beautify/reshape/slimming.
+
+STUDIO + GROUND (NO FLOATING):
+- Seamless off-white infinity background (no hard floor line).
+- Add clear ground-plane: soft contact shadow under BOTH feet + subtle ambient occlusion near soles + gentle floor gradient.
+
+LIGHT:
+- Softbox key + soft fill. Clean natural shadows. Neutral retouch.
+
+POSE (PRO MODEL STANCE, CONTROLLED):
+- Framing/camera/body proportions identical to reference.
+- Allow enough re-pose to look professional:
+  contrapposto (subtle weight shift), spine straight, chest naturally open,
+  break symmetry with arms; hands relaxed; shoulders relaxed; neck slightly elongated.
+- Do NOT change clothing fit/silhouette.
+
+ACCESSORIES (BATCH RULES):
+- ALWAYS include:
+  1) Bag (hand/forearm/shoulder; realistic strap + gravity)
+  2) Sunglasses (on eyes OR on head; natural fit, no distortion)
+- OPTIONAL headwear (only sometimes, not always):
+  - Choose at most ONE: bandana OR headband OR minimal hat
+  - If headwear is added, keep it subtle and do not compete with sunglasses.
+- Minimal/premium, logo-free, color-coordinated. Do not cover garment or steal focus.
+
+RULES:
+- No props. No new people/objects.
+
+OUTPUT: realistic e-commerce catalog photo, image only.`.trim();
+
+function guessMime(filePath) {
+  const ext = path.extname(filePath).toLowerCase();
+  if (ext === ".png") return "image/png";
+  return "image/jpeg"; // jpg/jpeg varsayımı
+}
+
+function sleep(ms) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+async function generateOne(inputPath, outputPath) {
+  const mimeType = guessMime(inputPath);
+  const imageBase64 = fs.readFileSync(inputPath, { encoding: "base64" });
+
+  // Basit retry: 429/503 gibi geçici durumlarda işe yarar
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const response = await ai.models.generateContent({
+        model: MODEL,
+        contents: [
+          {
+            role: "user",
+            parts: [
+              { inlineData: { mimeType, data: imageBase64 } },
+              { text: PROMPT },
+            ],
+          },
+        ],
+        config: {
+          responseModalities: ["IMAGE"],
+          imageConfig: IMAGE_CONFIG,
+        },
+      });
+
+      const parts = response.candidates?.[0]?.content?.parts ?? [];
+      const imgPart = parts.find((p) => p.inlineData?.data);
+
+      if (!imgPart) throw new Error("No image returned in response parts.");
+
+      fs.writeFileSync(outputPath, Buffer.from(imgPart.inlineData.data, "base64"));
+      return;
+    } catch (err) {
+      const msg = String(err?.message || err);
+      const isRetryable =
+        msg.includes("429") ||
+        msg.includes("RESOURCE_EXHAUSTED") ||
+        msg.includes("503") ||
+        msg.includes("UNAVAILABLE");
+
+      if (!isRetryable || attempt === 3) throw err;
+
+      // exponential backoff (kısa)
+      await sleep(800 * attempt);
+    }
+  }
+}
+
+async function runBatch() {
+  const inputDir = path.resolve(__dirname, "input");
+  const outputDir = path.resolve(__dirname, "output");
+
+  if (!fs.existsSync(inputDir)) {
+    console.error("❌ input/ klasörü yok. ~/nanobanana-test/input oluştur ve görselleri içine koy.");
+    process.exit(1);
+  }
+  if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir);
+
+  const files = fs
+    .readdirSync(inputDir)
+    .filter((f) => /\.(jpg|jpeg|png)$/i.test(f))
+    .sort((a, b) => a.localeCompare(b, "en"));
+
+  if (files.length === 0) {
+    console.error("❌ input/ içinde .jpg/.png yok.");
+    process.exit(1);
+  }
+
+  // ✅ max 10’lu batch mantığı: ilk 10’u alır (onay döngüsü için)
+  const batch = files.slice(0, 10);
+
+  console.log(`▶️ Batch: ${batch.length} görsel işlenecek (max 10). Model: ${MODEL}, Size: ${IMAGE_CONFIG.imageSize}, AR: ${IMAGE_CONFIG.aspectRatio}`);
+
+  for (let i = 0; i < batch.length; i++) {
+    const name = batch[i];
+    const inPath = path.join(inputDir, name);
+    const outName = name.replace(/\.(jpg|jpeg|png)$/i, ".png");
+    const outPath = path.join(outputDir, outName);
+
+    process.stdout.write(`(${i + 1}/${batch.length}) ${name} -> ${outName} ... `);
+    await generateOne(inPath, outPath);
+    console.log("✅");
+  }
+
+  console.log("✅ Batch tamamlandı. output/ klasörünü kontrol et.");
+}
+
+runBatch().catch((e) => {
+  console.error("❌ Hata:", e?.message || e);
+  process.exit(1);
+});

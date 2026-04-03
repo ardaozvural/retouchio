@@ -1,0 +1,18 @@
+{
+  "name": "nanobanana-test",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "job-builder-ui": "node job_builder_server.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@google/genai": "^1.43.0",
+    "dotenv": "^17.3.1"
+  }
+}

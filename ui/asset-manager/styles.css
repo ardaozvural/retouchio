@@ -1,0 +1,9 @@
+.filter-panel {
+  justify-items: end;
+}
+
+@media (max-width: 900px) {
+  .filter-panel {
+    justify-items: stretch;
+  }
+}

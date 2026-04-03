@@ -1,0 +1,45 @@
+{
+  "module": "footwear",
+  "rule_groups": {
+    "identity_lock": [
+      "Preserve the exact existing footwear identity as seen in the source image.",
+      "Do not reinterpret the footwear into another product family."
+    ],
+    "shape_lock": [
+      "Preserve the exact sole shape, upper silhouette, and overall product geometry."
+    ],
+    "strap_topology_lock": [
+      "Preserve the exact strap layout, strap count, attachment points, and closure logic."
+    ],
+    "material_lock": [
+      "Preserve the exact material appearance, finish, and texture behavior."
+    ],
+    "color_lock": [
+      "Preserve the exact footwear color family and contrast relationships."
+    ],
+    "branding_lock": [
+      "Preserve all branding, printed text, logos, and visible markings exactly when present."
+    ],
+    "pair_consistency": [
+      "Ensure left and right footwear remain a believable matched pair."
+    ],
+    "ground_contact_rules": [
+      "Maintain natural ground contact and realistic weight distribution."
+    ],
+    "ankle_integration_rules": [
+      "Integrate the footwear naturally with foot pose, ankle angle, and leg geometry."
+    ],
+    "replacement_rules": [
+      "Replace the original footwear completely with the referenced footwear product.",
+      "The new footwear must become the only visible footwear."
+    ],
+    "new_reference_adaptation_rules": [
+      "Adapt the referenced footwear to the model pose without changing its identity.",
+      "Follow the footwear reference as the single source of truth for the replacement product."
+    ],
+    "old_footwear_removal_rules": [
+      "Do not leave any visible remnants of the original footwear.",
+      "Do not blend old and new footwear into a hybrid result."
+    ]
+  }
+}

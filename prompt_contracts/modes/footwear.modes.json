@@ -1,0 +1,74 @@
+{
+  "module": "footwear",
+  "supported_modes": ["preserve", "replace", "ignore"],
+
+  "modes": {
+    "preserve": {
+      "description": "Keep the existing footwear exactly as worn in the source image.",
+      "enable_rule_groups": [
+        "identity_lock",
+        "shape_lock",
+        "strap_topology_lock",
+        "material_lock",
+        "color_lock",
+        "branding_lock",
+        "pair_consistency",
+        "ground_contact_rules"
+      ],
+      "disable_rule_groups": [
+        "replacement_rules",
+        "old_footwear_removal_rules",
+        "new_reference_adaptation_rules"
+      ],
+      "reference_policy": {
+        "source": "source_image",
+        "required": false
+      }
+    },
+
+    "replace": {
+      "description": "Replace the existing footwear with the referenced footwear product.",
+      "enable_rule_groups": [
+        "replacement_rules",
+        "new_reference_adaptation_rules",
+        "pair_consistency",
+        "ground_contact_rules",
+        "ankle_integration_rules",
+        "old_footwear_removal_rules"
+      ],
+      "disable_rule_groups": [
+        "identity_lock",
+        "branding_lock_old",
+        "color_lock_old",
+        "material_lock_old"
+      ],
+      "reference_policy": {
+        "source": "footwear_reference",
+        "required": true
+      }
+    },
+
+    "ignore": {
+      "description": "Do not actively control footwear.",
+      "enable_rule_groups": [],
+      "disable_rule_groups": [
+        "identity_lock",
+        "shape_lock",
+        "strap_topology_lock",
+        "material_lock",
+        "color_lock",
+        "branding_lock",
+        "pair_consistency",
+        "ground_contact_rules",
+        "replacement_rules",
+        "old_footwear_removal_rules",
+        "new_reference_adaptation_rules",
+        "ankle_integration_rules"
+      ],
+      "reference_policy": {
+        "source": null,
+        "required": false
+      }
+    }
+  }
+}

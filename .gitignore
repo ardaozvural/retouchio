@@ -1,0 +1,9 @@
+node_modules/
+.venv-validator/
+.DS_Store
+._*
+.env
+batch_output/
+batch_input/
+input_cmpltd/
+data/batches/*.manifest.json

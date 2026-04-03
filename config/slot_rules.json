@@ -1,0 +1,54 @@
+{
+  "slots": {
+    "footwear": {
+      "title": "Footwear Slot",
+      "refDir": "refs/accessories/footwear",
+      "referenceBindingText": "Treat the supplied footwear references as a strict visual lock for exact product identity with no reinterpretation, no drift, and no substitution.",
+      "rules": [
+        "Replace the original footwear completely with the exact referenced product only.",
+        "Lock silhouette, strap layout, heel geometry, sole shape, finish, and color family to the reference with no structure drift.",
+        "Do not improvise missing details, simplify construction, or restyle the product.",
+        "Do not alter garment length or lower drape to reveal more of the footwear.",
+        "Invalid if silhouette, straps, sole, finish, or color drift from the reference."
+      ]
+    },
+    "headwear_bandana": {
+      "title": "Compact Head Wrap Slot",
+      "refDir": "refs/accessories/headwear",
+      "referenceBindingText": "Treat the supplied head wrap references as a strict visual lock for wrap shape, coverage, placement, and finish with no reinterpretation or drift.",
+      "rules": [
+        "Interpret this slot as a compact full head wrap only, not a bandana, loose scarf, soft drape, or generic head covering.",
+        "The wrap must fully cover the hair and sit tightly and smoothly on the head surface.",
+        "Keep the wrap controlled, compact, and consistent with the supplied references.",
+        "No loose tails, no hanging ends, no trailing fabric, no visible knot, and no improvised wrap variations.",
+        "No wrapping under the chin and no front drape behavior.",
+        "Keep the face fully visible and the neck mostly open.",
+        "Do not transfer facial features, face shape, skin tone, hairline, or identity from the head wrap reference images.",
+        "Ignore the identity of the person in the head wrap reference images. Use only the wrap shape, coverage, wrapping logic, rear volume, and placement.",
+        "Invalid if trailing ends appear, the wrap becomes loose, coverage drifts, hair becomes exposed beyond the reference logic, or the result behaves like a hijab-style drape, scarf, or bandana."
+      ]
+    },
+    "headwear_hat": {
+      "title": "Headwear Hat Slot",
+      "refDir": "refs/accessories/hat",
+      "referenceBindingText": "Treat the supplied hat references as a strict visual lock for exact product identity, shape, wear position, and finish with no reinterpretation or drift.",
+      "rules": [
+        "Interpret this slot as a hat only. Do not convert it into scarf, cap, or generic headwear.",
+        "Lock brim shape, crown shape, material read, finish, and wear position to the reference.",
+        "Keep placement realistic relative to hair and head shape without distorting identity.",
+        "Invalid if brim, crown, finish, scale, or wear position deviate from the reference."
+      ]
+    },
+    "neck_scarf": {
+      "title": "Neck Scarf Slot",
+      "refDir": "refs/accessories/scarf",
+      "referenceBindingText": "Treat the supplied neck scarf references as a strict visual lock for exact accessory identity, wrap logic, placement, and finish with no reinterpretation or drift.",
+      "rules": [
+        "Interpret this slot as a neck scarf only. Do not collapse it into headwear.",
+        "Lock wrap placement, knot logic, volume, material read, and color family to the reference.",
+        "Do not let the scarf cover key garment details or alter neckline structure beyond natural overlap.",
+        "Invalid if wrap logic, placement, volume, finish, or color drift from the reference."
+      ]
+    }
+  }
+}

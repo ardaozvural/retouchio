@@ -1,0 +1,33 @@
+{
+  "module": "garment",
+  "rule_groups": {
+    "silhouette_lock": [
+      "Preserve the exact garment silhouette, cut, and structural proportions.",
+      "Do not alter the overall garment shape or fit on the body."
+    ],
+    "pattern_lock": [
+      "Preserve the exact pattern layout, scale, and geometry.",
+      "Do not distort, reflow, or reinterpret the pattern in any way."
+    ],
+    "fabric_lock": [
+      "Preserve the exact fabric type, texture, and material behavior.",
+      "Do not substitute or reinterpret the fabric."
+    ],
+    "neckline_lock": [
+      "Preserve the exact neckline shape and position.",
+      "The neckline must remain clearly visible and unchanged."
+    ],
+    "proportion_lock": [
+      "Maintain consistent garment-to-body proportions.",
+      "Do not shrink, stretch, or reshape the garment relative to the model."
+    ],
+    "occlusion_protection": [
+      "Do not allow accessories or other elements to cover critical garment areas.",
+      "Keep primary pattern zones and neckline visible."
+    ],
+    "controlled_styling_rules": [
+      "Allow subtle styling improvements without altering garment identity.",
+      "Enhance visual quality without modifying structure or pattern."
+    ]
+  }
+}

@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Retouchio Production Flow</title>
+    <link rel="stylesheet" href="/job-builder/styles.css" />
+    <link rel="stylesheet" href="/shared/shell.css" />
+  </head>
+  <body data-route="job-builder">
+    <div class="app-shell">
+      <aside class="app-sidebar">
+        <div class="sidebar-title">Retouchio Tools</div>
+        <nav class="sidebar-nav">
+          <a class="nav-link" data-nav-route="job-builder" href="/job-builder">Production Flow</a>
+          <a class="nav-link" data-nav-route="asset-manager" href="/asset-manager">Asset Manager</a>
+          <a class="nav-link" data-nav-route="input-manager" href="/input-manager">Target Inputs</a>
+          <a class="nav-link" data-nav-route="batch-jobs" href="/batch-jobs">Batch Jobs</a>
+        </nav>
+        <div class="sidebar-footer">Production authoring workspace</div>
+      </aside>
+
+      <main class="app-main">
+        <header class="app-page-header">
+          <h1>Production Flow</h1>
+          <p>Configure inputs, model, styling, and execution for a batch transformation.</p>
+        </header>
+
+        <div class="app-content">
+          <div class="page-shell production-shell">
+            <div id="statusBanner" class="status-banner" hidden></div>
+
+            <section class="production-top-grid" aria-label="Configuration">
+              <div class="production-column">
+                <section class="card shell-card target-shell">
+                  <div class="shell-section-header">
+                    <p class="step-label">Step 1</p>
+                    <h2>Target Inputs</h2>
+                    <p>This is the image set currently being processed.</p>
+                  </div>
+
+                  <div class="shell-card-body">
+                    <label class="field">
+                      <span>Input Set</span>
+                      <select id="inputSource"></select>
+                      <p id="inputSourceHint" class="field-hint"></p>
+                    </label>
+
+                    <div id="targetInputSummary" class="input-set-summary"></div>
+                  </div>
+                </section>
+
+                <section class="card shell-card product-shell">
+                  <div class="shell-section-header">
+                    <p class="step-label">Step 3</p>
+                    <h2>Product</h2>
+                    <p>Keep garment handling compact, clear, and secondary to the model decisions.</p>
+                  </div>
+
+                  <div class="shell-card-body product-body">
+                    <div id="productIntentControl" class="segmented-control" role="group" aria-label="Product intent">
+                      <button type="button" class="segmented-button" data-product-intent="preserve">Preserve</button>
+                      <button type="button" class="segmented-button" data-product-intent="clean">Clean</button>
+                      <button type="button" class="segmented-button" data-product-intent="restyle">Restyle</button>
+                    </div>
+
+                    <div class="product-preview-block">
+                      <div class="preview-frame preview-frame-compact">
+                        <img id="productBeforeImage" alt="Selected input preview" hidden />
+                        <div id="productBeforeEmpty" class="preview-empty">Select an input set to preview the source image.</div>
+                      </div>
+
+                      <div class="product-preview-copy">
+                        <p class="eyebrow-label">Before Preview</p>
+                        <p id="productHelperText" class="helper-line">Keep the product close to the source unless this run needs a deliberate restyle.</p>
+                      </div>
+                    </div>
+
+                    <details class="card-subpanel">
+                      <summary>Advanced</summary>
+                      <div class="card-subpanel-body">
+                        <label class="field field-block">
+                          <span>Material Detail References</span>
+                          <textarea id="garmentMaterialRefs" rows="3" placeholder="One detail id per line"></textarea>
+                          <p class="field-hint">Optional material detail hints for difficult fabrics.</p>
+                        </label>
+
+                        <label class="field field-block">
+                          <span>Pattern Detail References</span>
+                          <textarea id="garmentPatternRefs" rows="3" placeholder="One detail id per line"></textarea>
+                          <p class="field-hint">Optional pattern hints when print fidelity matters.</p>
+                        </label>
+                      </div>
+                    </details>
+                  </div>
+                </section>
+              </div>
+
+              <div class="production-column">
+                <section class="card shell-card model-shell">
+                  <div class="shell-section-header">
+                    <p class="step-label">Step 2</p>
+                    <h2>Model</h2>
+                    <p>The dominant control surface for identity, corrections, finish, and safeguards.</p>
+                  </div>
+
+                  <div class="model-card-stack">
+                    <article class="shell-subcard">
+                      <div class="subcard-header">
+                        <h3>Identity</h3>
+                        <p>Set the face handling mode without dropping into technical controls.</p>
+                      </div>
+
+                      <div id="identityModeControl" class="segmented-control segmented-control-wide" role="group" aria-label="Identity mode">
+                        <button type="button" class="segmented-button" data-identity-mode="preserve">Preserve</button>
+                        <button type="button" class="segmented-button" data-identity-mode="replace">Replace</button>
+                        <button type="button" class="segmented-button" data-identity-mode="ignore">Ignore</button>
+                      </div>
+
+                      <p id="identityHelperText" class="helper-line"></p>
+
+                      <div id="identityReplaceDropzone" class="reference-dropzone" hidden>
+                        <input id="identityReferenceInput" type="file" accept="image/*" hidden />
+                        <div class="reference-dropzone-copy">
+                          <strong>Reference Face</strong>
+                          <span>Drop an image here or choose a file to stage the replacement preview shell.</span>
+                        </div>
+                        <button id="identityReferenceButton" class="button button-secondary" type="button">Upload Reference Face</button>
+
+                        <div id="identityReferencePreview" class="reference-preview" hidden>
+                          <img id="identityReferencePreviewImage" alt="Reference face preview" />
+                          <div>
+                            <p id="identityReferenceName" class="reference-preview-name">No file selected</p>
+                            <p class="reference-preview-note">Local UI preview only.</p>
+                          </div>
+                        </div>
+                      </div>
+                    </article>
+
+                    <article class="shell-subcard">
+                      <div class="subcard-header">
+                        <h3>Physical Corrections</h3>
+                        <p>Apply only the cleanup moves that support the selected input set.</p>
+                      </div>
+                      <div id="physicalCorrectionsGroup" class="pill-group" role="group" aria-label="Physical corrections"></div>
+                    </article>
+
+                    <article class="shell-subcard">
+                      <div class="subcard-header">
+                        <h3>Aesthetic Enhancements</h3>
+                        <p>Choose the final polish level without overpowering the product.</p>
+                      </div>
+                      <div id="aestheticEnhancementsGroup" class="pill-group" role="group" aria-label="Aesthetic enhancements"></div>
+                    </article>
+
+                    <article class="shell-subcard">
+                      <div class="subcard-header">
+                        <h3>Constraints</h3>
+                        <p>Protect identity, pose, and product truth while the edit is assembled.</p>
+                      </div>
+                      <div id="constraintsGroup" class="pill-group" role="group" aria-label="Constraints"></div>
+                    </article>
+                  </div>
+                </section>
+              </div>
+
+              <div class="production-column">
+                <section class="card shell-card styling-shell">
+                  <div class="shell-section-header">
+                    <p class="step-label">Step 4</p>
+                    <h2>Styling</h2>
+                    <p>Open one accessory family at a time and keep each decision focused.</p>
+                  </div>
+
+                  <div id="stylingAccordion" class="styling-accordion"></div>
+                </section>
+              </div>
+            </section>
+
+            <section class="card result-system-card">
+              <div class="result-review-block">
+                <div class="shell-section-header shell-section-header-compact">
+                  <p class="step-label">Step 6</p>
+                  <h2>Review</h2>
+                  <p>Confirm the visible setup before you compile or run.</p>
+                </div>
+
+                <div id="reviewCards" class="review-card-grid"></div>
+                <p class="review-callout">You are about to generate:</p>
+                <p id="reviewSentence" class="review-sentence"></p>
+              </div>
+
+              <div class="result-strip-block">
+                <div class="result-block-header">
+                  <div>
+                    <p class="step-label">Step 5</p>
+                    <h3>Variation Strip</h3>
+                  </div>
+                  <p class="result-block-copy">Select a candidate to inspect below.</p>
+                </div>
+
+                <div id="variationStrip" class="variation-strip"></div>
+              </div>
+
+              <div class="result-hero-block">
+                <div class="result-block-header">
+                  <div>
+                    <p class="step-label">Step 5</p>
+                    <h3>Hero Output Preview</h3>
+                  </div>
+                  <p id="heroPreviewLabel" class="result-block-copy">Variation 01</p>
+                </div>
+
+                <div id="heroPreviewCompare" class="hero-preview-shell is-compare">
+                  <section class="hero-preview-pane">
+                    <p class="hero-preview-label">Before</p>
+                    <div class="hero-preview-frame">
+                      <img id="heroBeforeImage" alt="Before preview" hidden />
+                      <div id="heroBeforeEmpty" class="hero-preview-empty">Select an input set to preview the source image.</div>
+                    </div>
+                  </section>
+
+                  <section class="hero-preview-pane hero-preview-pane-output">
+                    <p class="hero-preview-label">After</p>
+                    <div class="hero-preview-frame">
+                      <img id="heroAfterImage" alt="Output preview" hidden />
+                      <div id="heroAfterEmpty" class="hero-preview-empty">No variation selected.</div>
+                    </div>
+                  </section>
+                </div>
+
+                <div class="hero-output-footer">
+                  <div class="action-strip hero-output-actions">
+                    <button id="downloadOutputButton" class="button button-secondary" type="button">Download</button>
+                    <button id="approveOutputButton" class="button button-secondary" type="button">Approve</button>
+                    <button id="regenerateOutputButton" class="button button-secondary" type="button">Regenerate</button>
+                    <button id="compareOutputButton" class="button button-secondary" type="button">Compare</button>
+                  </div>
+
+                  <div id="outputMeta" class="output-meta-list"></div>
+                </div>
+              </div>
+            </section>
+
+            <div class="hidden-ui-store" aria-hidden="true">
+              <input id="jobId" type="text" />
+              <input id="displayName" type="text" />
+              <div id="inputSourceSummary"></div>
+
+              <select id="workflowType">
+                <option value="studio_cleanup">Studio Cleanup</option>
+                <option value="face_identity">Face &amp; Identity</option>
+                <option value="styling">Styling</option>
+                <option value="advanced">Advanced</option>
+              </select>
+              <div id="workflowDescription"></div>
+              <div id="workflowVisibleSummary"></div>
+              <div id="configurationStepHint"></div>
+
+              <select id="subjectMode"></select>
+              <select id="subjectReferenceId"></select>
+              <select id="garmentMode"></select>
+
+              <div id="eyewearCard">
+                <select id="eyewearAction"></select>
+                <p id="eyewearActionHint"></p>
+                <div id="eyewearDependentFields">
+                  <div id="eyewearSourceField">
+                    <select id="eyewearSource"></select>
+                  </div>
+                  <div id="eyewearPlacementField">
+                    <select id="eyewearPlacement"></select>
+                  </div>
+                  <div id="eyewearAssetField">
+                    <select id="eyewearAssetId"></select>
+                    <p id="eyewearAssetHint"></p>
+                  </div>
+                </div>
+              </div>
+
+              <div id="bagCard">
+                <select id="bagAction"></select>
+                <p id="bagActionHint"></p>
+                <div id="bagDependentFields">
+                  <div id="bagSourceField">
+                    <select id="bagSource"></select>
+                  </div>
+                  <div id="bagPlacementField">
+                    <select id="bagPlacement"></select>
+                  </div>
+                  <div id="bagAssetField">
+                    <select id="bagAssetId"></select>
+                    <p id="bagAssetHint"></p>
+                  </div>
+                </div>
+              </div>
+
+              <div id="headwearCard">
+                <select id="headwearMode"></select>
+                <p id="headwearModeHint"></p>
+                <div id="headwearDependentFields">
+                  <div id="headwearSourceField">
+                    <select id="headwearSource"></select>
+                  </div>
+                  <div id="headwearPlacementField">
+                    <select id="headwearPlacement"></select>
+                  </div>
+                  <div id="headwearVariantField">
+                    <select id="headwearVariant"></select>
+                  </div>
+                  <div id="headwearAssetField">
+                    <select id="headwearAssetId"></select>
+                    <p id="headwearAssetHint"></p>
+                  </div>
+                </div>
+              </div>
+
+              <div id="footwearCard">
+                <select id="footwearMode"></select>
+                <p id="footwearModeHint"></p>
+                <div id="footwearDependentFields">
+                  <div id="footwearSourceField">
+                    <select id="footwearSource"></select>
+                  </div>
+                  <div id="footwearVariantField">
+                    <select id="footwearVariant"></select>
+                  </div>
+                  <div id="footwearAssetField">
+                    <select id="footwearAssetId"></select>
+                    <p id="footwearAssetHint"></p>
+                  </div>
+                </div>
+              </div>
+
+              <select id="accessoryMode"></select>
+              <div id="accessoryCard"></div>
+              <div id="accessoryItemsContainer"></div>
+              <div id="accessoryItems"></div>
+              <button id="addAccessoryButton" type="button">Add Row</button>
+
+              <select id="sceneMode"></select>
+              <select id="sceneProfile"></select>
+              <select id="outputProfileMode"></select>
+              <select id="outputProfileProfile"></select>
+              <p id="outputTypeHint"></p>
+              <select id="globalNegativeMode"></select>
+              <textarea id="globalNegativeItems"></textarea>
+
+              <div id="reviewSummary"></div>
+
+              <button id="resetDefaultButton" type="button">Reset</button>
+              <button id="loadSampleButton" type="button">Load Sample</button>
+              <button id="saveJobButton" type="button">Save Draft</button>
+              <select id="savedJobSelect"></select>
+              <button id="loadSavedJobButton" type="button">Load Draft</button>
+              <button id="copyJsonButton" type="button">Copy JSON</button>
+              <button id="downloadJsonButton" type="button">Download JSON</button>
+              <button id="copyPromptButton" type="button">Copy Prompt</button>
+
+              <div id="developerToolsCard"></div>
+              <ul id="generatedJobsList"></ul>
+              <ul id="sampleJobsList"></ul>
+              <pre id="promptPreview"></pre>
+              <pre id="jsonPreview"></pre>
+
+              <span id="imageAspectRatio"></span>
+              <span id="imageSize"></span>
+              <span id="compileStatus"></span>
+              <span id="validationSummary"></span>
+              <div id="validationState"></div>
+              <ul id="validationWarnings"></ul>
+              <ul id="validationErrors"></ul>
+
+              <span id="runtimeBadge"></span>
+              <span id="registryBadge"></span>
+              <span id="assetStandardBadge"></span>
+              <span id="missingDirsBadge"></span>
+
+              <span id="readinessBadge"></span>
+              <span id="readinessInputExists"></span>
+              <span id="readinessInputCount"></span>
+              <span id="readinessRefsCount"></span>
+              <div id="readinessState"></div>
+              <ul id="readinessWarnings"></ul>
+              <ul id="readinessErrors"></ul>
+
+              <span id="runStatusBadge"></span>
+              <span id="runBatchJobName"></span>
+              <span id="runBatchState"></span>
+              <span id="runDuration"></span>
+              <span id="runCommand"></span>
+              <pre id="runLogs"></pre>
+              <div id="runSpinner" hidden></div>
+
+              <button id="refreshAllBatchesButton" type="button">Refresh All</button>
+              <select id="batchFilterSelect">
+                <option value="all">All</option>
+              </select>
+              <div id="batchJobsEmpty"></div>
+              <div id="batchJobsList"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="job-builder-action-bar" role="region" aria-label="Execution controls">
+          <div class="job-builder-action-bar-inner">
+            <div class="job-builder-action-bar-status">
+              <div class="action-bar-status-pill">
+                <span>Compile</span>
+                <strong id="actionBarCompileStatus">Idle</strong>
+              </div>
+              <div class="action-bar-status-pill">
+                <span>Dry Check</span>
+                <strong id="actionBarReadinessStatus">Unknown</strong>
+              </div>
+              <div class="action-bar-status-pill">
+                <span>Batch</span>
+                <strong id="actionBarBatchStatus">Idle</strong>
+              </div>
+              <p id="executionActionHint" class="execution-action-bar-hint">No active pending or running batch to cancel.</p>
+            </div>
+
+            <div class="action-strip action-bar-actions">
+              <button id="compileButton" class="button button-secondary" type="button">Compile Prompt</button>
+              <button id="runDryCheckButton" class="button button-secondary" type="button">Run Dry Check</button>
+              <button id="runBatchButton" class="button button-primary" type="button">Run Batch</button>
+              <button id="cancelActiveBatchButton" class="button button-outline" type="button">Cancel</button>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+
+    <script src="/job-builder/app.js" defer></script>
+    <script src="/shared/shell.js" defer></script>
+  </body>
+</html>

@@ -1,0 +1,17 @@
+services:
+  nanobanana:
+    build: .
+    container_name: nanobanana
+    working_dir: /work
+
+    volumes:
+      - ./:/work
+      - node_modules:/work/node_modules
+
+    environment:
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+
+    command: ["sleep", "infinity"]
+
+volumes:
+  node_modules:

@@ -1,0 +1,50 @@
+{
+  "meta": {
+    "standardId": "retouchio_asset_bank_standard_v1",
+    "version": "1.0.0",
+    "frozen": true,
+    "frozenAt": "2026-04-01"
+  },
+  "namingPatterns": {
+    "subjectReferenceId": "^subject_[0-9]{4}$",
+    "garmentMaterialDetailId": "^material_detail_[0-9]{4}$",
+    "garmentPatternDetailId": "^pattern_detail_[0-9]{4}$",
+    "footwearAssetId": "^footwear_[0-9]{4}$",
+    "headwearAssetId": "^headwear_(bandana|hat|headband)_[0-9]{4}$",
+    "accessoryAssetIdsByFamily": {
+      "eyewear": "^sunglasses_[0-9]{4}$",
+      "bag": "^bag_[0-9]{4}$",
+      "neckwear": "^neck_scarf_[0-9]{4}$"
+    }
+  },
+  "directoryStrategy": {
+    "subject": [
+      "refs/subjects"
+    ],
+    "garmentMaterial": [
+      "refs/garment_details/material"
+    ],
+    "garmentPattern": [
+      "refs/garment_details/pattern"
+    ],
+    "footwear": [
+      "refs/accessories/footwear"
+    ],
+    "headwear": [
+      "refs/accessories/headwear",
+      "refs/accessories/hat"
+    ],
+    "accessoryByFamily": {
+      "eyewear": [
+        "refs/accessories/eyewear"
+      ],
+      "bag": [
+        "refs/accessories/bag"
+      ],
+      "neckwear": [
+        "refs/accessories/neckwear",
+        "refs/accessories/scarf"
+      ]
+    }
+  }
+}

@@ -1,0 +1,66 @@
+{
+  "version": "2",
+  "jobId": "job_0001",
+  "displayName": "retouchio-job-builder-default",
+  "inputSource": "batch_input",
+  "entities": {
+    "subject": {
+      "mode": "preserve",
+      "variant": "identity_reference",
+      "reference_id": "subject_0001",
+      "reference_ids": [
+        "subject_0001"
+      ]
+    },
+    "garment": {
+      "mode": "preserve",
+      "variant": "source_garment",
+      "detail_refs": {
+        "material": [],
+        "pattern": []
+      }
+    },
+    "footwear": {
+      "mode": "replace",
+      "variant": "sandal",
+      "asset_id": "footwear_0001",
+      "asset_ids": [],
+      "slot_key": null
+    },
+    "headwear": {
+      "mode": "add",
+      "variant": "bandana",
+      "asset_id": "headwear_bandana_0001",
+      "asset_ids": [],
+      "slot_key": null
+    },
+    "accessory": {
+      "mode": "apply",
+      "items": [
+        {
+          "family": "eyewear",
+          "variant": "sunglasses",
+          "mode": "add",
+          "asset_id": ""
+        }
+      ]
+    },
+    "scene": {
+      "mode": "apply",
+      "profile": "studio_catalog",
+      "variant": "infinity_background"
+    },
+    "output_profile": {
+      "mode": "apply",
+      "profile": "catalog_4x5_2k"
+    },
+    "global_negative_rules": {
+      "mode": "apply",
+      "items": []
+    }
+  },
+  "meta": {
+    "source_format": "mixed",
+    "legacy_active_slots": []
+  }
+}

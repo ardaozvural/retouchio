@@ -1,0 +1,47 @@
+{
+  "module": "garment",
+  "priority": "critical",
+
+  "invariants": [
+    "Preserve exact garment silhouette and cut",
+    "Preserve neckline shape and position",
+    "Preserve sleeve length and structure",
+    "Preserve garment proportions relative to body",
+    "Preserve exact pattern geometry and layout",
+    "Preserve fabric type and visual behavior"
+  ],
+
+  "allowed_transforms": [
+    "Minor wrinkle smoothing",
+    "Subtle lighting adaptation",
+    "Micro shadow adjustments",
+    "Natural fabric tension correction"
+  ],
+
+  "forbidden": [
+    "Any redesign of garment structure",
+    "Any change in pattern layout or scale",
+    "Any change in neckline shape or coverage",
+    "Any fabric type change",
+    "Any addition or removal of garment parts",
+    "Any stylization that alters realism"
+  ],
+
+  "occlusion_rules": [
+    "Garment must not be covered by accessories",
+    "Neckline must remain visible",
+    "Primary pattern zones must not be blocked"
+  ],
+
+  "reference_policy": {
+    "source": "subject_image",
+    "strictness": "absolute",
+    "allow_generalization": false
+  },
+
+  "failure_conditions": [
+    "Pattern distortion detected",
+    "Silhouette deformation detected",
+    "Neckline occlusion detected"
+  ]
+}

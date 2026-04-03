@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Retouchio Batch Jobs</title>
+    <link rel="stylesheet" href="/batch-jobs/styles.css" />
+    <link rel="stylesheet" href="/shared/shell.css" />
+  </head>
+  <body data-route="batch-jobs">
+    <div class="app-shell">
+      <aside class="app-sidebar">
+        <div class="sidebar-title">Retouchio Tools</div>
+        <nav class="sidebar-nav">
+          <a class="nav-link" data-nav-route="job-builder" href="/job-builder">Production Flow</a>
+          <a class="nav-link" data-nav-route="asset-manager" href="/asset-manager">Reference Library</a>
+          <a class="nav-link" data-nav-route="input-manager" href="/input-manager">Target Inputs</a>
+          <a class="nav-link" data-nav-route="batch-jobs" href="/batch-jobs">Batch Jobs</a>
+        </nav>
+        <div class="sidebar-footer">Run review workspace</div>
+      </aside>
+
+      <main class="app-main">
+        <header class="app-page-header">
+          <h1>Batch Jobs</h1>
+          <p>Track run status, review outputs, and evaluate completed batches.</p>
+        </header>
+
+        <div class="app-content">
+          <div class="page-shell batch-page-shell">
+            <div id="statusBanner" class="status-banner" hidden></div>
+
+            <section class="card secondary-card batch-overview-card">
+              <div class="card-header">
+                <h2>Run Overview</h2>
+                <p class="card-description">Status-first snapshot of what is active, what is ready to review, and what still needs attention.</p>
+              </div>
+              <div class="system-badges batch-summary-grid">
+                <div class="badge-pill">
+                  <span>Total Jobs</span>
+                  <strong id="summaryTotal">0</strong>
+                </div>
+                <div class="badge-pill">
+                  <span>Active</span>
+                  <strong id="summaryActive">0</strong>
+                </div>
+                <div class="badge-pill">
+                  <span>Needs Download</span>
+                  <strong id="summaryDownloadNeeded">0</strong>
+                </div>
+                <div class="badge-pill">
+                  <span>Last Refresh</span>
+                  <strong id="summaryLastRefresh">-</strong>
+                </div>
+              </div>
+              <div class="batch-toolbar batch-overview-toolbar">
+                <button id="refreshAllBatchesButton" class="button button-secondary" type="button">Refresh All</button>
+                <label class="field batch-filter-field">
+                  <span>View Focus</span>
+                  <select id="batchFilterSelect">
+                    <option value="all">All Runs</option>
+                    <option value="active">Active Runs</option>
+                    <option value="completed">Completed Runs</option>
+                    <option value="failed">Failed Runs</option>
+                    <option value="cancelled">Cancelled Runs</option>
+                  </select>
+                </label>
+              </div>
+            </section>
+
+            <section id="activeRunsSection" class="card batch-section-card">
+              <div class="card-header">
+                <h2>Active Runs</h2>
+                <p class="card-description">Pending and running batches appear here first so cancel access stays obvious.</p>
+              </div>
+              <div id="activeRunsEmpty" class="empty-state">No active runs right now.</div>
+              <div id="activeRunsList" class="batch-jobs-list"></div>
+            </section>
+
+            <section id="completedRunsSection" class="card batch-section-card">
+              <div class="card-header">
+                <h2>Completed Runs</h2>
+                <p class="card-description">Finished batches move here for output download, visual review, compare mode, and evaluation.</p>
+              </div>
+              <div id="completedRunsEmpty" class="empty-state">No completed runs yet.</div>
+              <div id="completedRunsList" class="batch-jobs-list"></div>
+            </section>
+
+            <section id="failedRunsSection" class="card secondary-card batch-section-card batch-section-secondary">
+              <div class="card-header">
+                <h2>Failed / Cancelled</h2>
+                <p class="card-description">Failures and cancelled runs stay accessible here without competing with the main review flow.</p>
+              </div>
+              <div id="failedRunsEmpty" class="empty-state">No failed or cancelled runs.</div>
+              <div id="failedRunsList" class="batch-jobs-list"></div>
+            </section>
+
+            <section class="card secondary-card review-workspace-card">
+              <div class="card-header">
+                <h2>Output Review</h2>
+                <p class="card-description">Review outputs in output-only or compare mode, then add structured evaluation tags.</p>
+              </div>
+              <div class="review-workspace-grid">
+                <div class="review-workspace-panel">
+                  <p class="mini-title">Current Review Session</p>
+                  <p id="reviewSessionState" class="review-session-state">Open a completed run to start reviewing outputs.</p>
+                  <div class="review-session-list">
+                    <p class="review-session-item"><strong>Batch</strong><span id="reviewSessionBatch">-</span></p>
+                    <p class="review-session-item"><strong>Mode</strong><span id="reviewSessionMode">Output Only</span></p>
+                    <p class="review-session-item"><strong>Filter</strong><span id="reviewSessionFilter">All</span></p>
+                    <p class="review-session-item"><strong>Evaluation</strong><span id="reviewSessionCounts">0 reviewed / 0 total</span></p>
+                  </div>
+                </div>
+                <div class="review-workspace-panel">
+                  <p class="mini-title">Review Notes</p>
+                  <p id="reviewSupportNote" class="review-support-note">Compare uses saved pairing when available. Quality tags are local review notes stored in this browser.</p>
+                  <div class="review-mode-legend">
+                    <span class="review-mode-pill">Output Only</span>
+                    <span class="review-mode-pill">Compare</span>
+                    <span class="review-mode-pill">Quality Tags</span>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </div>
+        </div>
+      </main>
+    </div>
+
+    <div id="outputsModal" class="modal-overlay" hidden>
+      <div id="outputsModalBackdrop" class="modal-overlay-backdrop"></div>
+      <section class="modal-overlay-panel" role="dialog" aria-modal="true" aria-labelledby="outputsModalTitle">
+        <header class="modal-overlay-header">
+          <div>
+            <h3 id="outputsModalTitle">Output Review</h3>
+            <p id="outputsModalMeta" class="modal-overlay-meta">-</p>
+            <p id="outputsModalSupportNote" class="modal-overlay-note">Compare uses saved pairing when available. Missing pairs are shown honestly.</p>
+          </div>
+          <div class="output-review-toolbar">
+            <div class="output-review-controls" role="group" aria-label="Review mode">
+              <button id="outputsModeOutputOnlyButton" class="review-mode-button is-active" type="button" aria-pressed="true">
+                Output Only
+              </button>
+              <button id="outputsModeCompareButton" class="review-mode-button" type="button" aria-pressed="false">
+                Compare
+              </button>
+            </div>
+            <label class="field output-tag-filter-field">
+              <span>Evaluation Filter</span>
+              <select id="outputsTagFilterSelect">
+                <option value="all">All</option>
+                <option value="tagged">Reviewed</option>
+                <option value="untagged">Not Reviewed</option>
+              </select>
+            </label>
+          </div>
+          <button id="closeOutputsModalButton" class="button button-secondary" type="button">Close</button>
+        </header>
+        <div id="outputsModalBody" class="modal-overlay-body"></div>
+      </section>
+    </div>
+
+    <div id="outputsImageModal" class="modal-overlay" hidden>
+      <div id="outputsImageModalBackdrop" class="modal-overlay-backdrop"></div>
+      <section class="modal-overlay-panel modal-overlay-panel-image" role="dialog" aria-modal="true" aria-labelledby="outputsImageModalTitle">
+        <header class="modal-overlay-header">
+          <div>
+            <h3 id="outputsImageModalTitle">Output Preview</h3>
+            <p id="outputsImageModalMeta" class="modal-overlay-meta">-</p>
+          </div>
+          <button id="closeOutputsImageModalButton" class="button button-secondary" type="button">Close</button>
+        </header>
+        <div class="modal-overlay-body">
+          <div id="outputsCompareGrid" class="output-compare-grid">
+            <div id="outputsLargeInputPane" class="output-compare-pane">
+              <p class="output-compare-label">Input</p>
+              <div class="output-large-wrap">
+                <img id="outputsLargeInputImage" src="" alt="Batch input preview" />
+                <div id="outputsLargeInputEmpty" class="output-large-empty" hidden>No input found</div>
+              </div>
+            </div>
+            <div id="outputsLargeOutputPane" class="output-compare-pane">
+              <p class="output-compare-label">Output</p>
+              <div class="output-large-wrap">
+                <img id="outputsLargeOutputImage" src="" alt="Batch output preview" />
+                <div id="outputsLargeOutputEmpty" class="output-large-empty" hidden>No output found</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <script src="/batch-jobs/app.js" defer></script>
+    <script src="/shared/shell.js" defer></script>
+  </body>
+</html>

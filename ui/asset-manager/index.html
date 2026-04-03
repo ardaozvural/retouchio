@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Retouchio Reference Library</title>
+    <link rel="stylesheet" href="/asset-manager/styles.css" />
+    <link rel="stylesheet" href="/shared/shell.css" />
+  </head>
+  <body data-route="asset-manager">
+    <div class="app-shell">
+      <aside class="app-sidebar">
+        <div class="sidebar-title">Retouchio Tools</div>
+        <nav class="sidebar-nav">
+          <a class="nav-link" data-nav-route="job-builder" href="/job-builder">Production Flow</a>
+          <a class="nav-link" data-nav-route="asset-manager" href="/asset-manager">Reference Library</a>
+          <a class="nav-link" data-nav-route="input-manager" href="/input-manager">Target Inputs</a>
+          <a class="nav-link" data-nav-route="batch-jobs" href="/batch-jobs">Batch Jobs</a>
+        </nav>
+        <div class="sidebar-footer">Reference asset workspace</div>
+      </aside>
+
+      <main class="app-main">
+        <header class="app-page-header">
+          <h1>Reference Library</h1>
+          <p>Manage reusable reference assets for styling, identity, and fidelity across Production Flow.</p>
+        </header>
+
+        <div class="app-content">
+          <div class="page-shell">
+            <section class="card upload-card">
+              <div class="card-header">
+                <h2>Upload New Reference</h2>
+                <p>Add reusable references to the library so they can be selected later inside Production Flow.</p>
+              </div>
+              <form id="uploadForm" class="upload-form">
+                <label class="field">
+                  <span>Reference Type</span>
+                  <select id="familySelect" required></select>
+                </label>
+                <label class="field">
+                  <span>Style Type / Variant</span>
+                  <select id="variantSelect" required></select>
+                </label>
+                <label class="field field-wide">
+                  <span>Reference Images</span>
+                  <input id="filesInput" type="file" accept=".jpg,.jpeg,.png,.webp" multiple required />
+                </label>
+                <p id="filesHint" class="hint">No files selected.</p>
+                <div class="actions">
+                  <button id="uploadButton" class="button button-primary" type="submit">Upload Reference</button>
+                  <button id="refreshButton" class="button button-secondary" type="button">Refresh Library</button>
+                </div>
+              </form>
+              <div id="statusBanner" class="status-banner" hidden></div>
+            </section>
+
+            <section class="card">
+              <div class="card-header row-between">
+                <div>
+                <h2>Reference Library</h2>
+                <p id="summaryLine">Loading references...</p>
+                </div>
+                <div class="filter-panel">
+                  <p class="filter-label">Library Filters</p>
+                  <div class="filter-controls">
+                    <button class="filter-tab is-active" data-filter="all" type="button">All</button>
+                    <button class="filter-tab" data-filter="footwear" type="button">Footwear</button>
+                    <button class="filter-tab" data-filter="headwear" type="button">Headwear</button>
+                    <button class="filter-tab" data-filter="eyewear" type="button">Eyewear</button>
+                    <button class="filter-tab" data-filter="bag" type="button">Bag</button>
+                    <button class="filter-tab" data-filter="neckwear" type="button">Neckwear</button>
+                    <button class="filter-tab" data-filter="garment_material" type="button">Garment Material</button>
+                    <button class="filter-tab" data-filter="garment_pattern" type="button">Garment Pattern</button>
+                  </div>
+                </div>
+              </div>
+              <div id="assetGrid" class="asset-grid"></div>
+              <div id="emptyState" class="empty-state" hidden>No references yet. Upload one to use it in Production Flow.</div>
+            </section>
+          </div>
+        </div>
+      </main>
+    </div>
+
+    <div id="previewModal" class="modal" hidden>
+      <div id="modalBackdrop" class="modal-backdrop"></div>
+      <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+        <div class="modal-header">
+          <div>
+            <h3 id="modalTitle">Reference Preview</h3>
+            <p id="modalMeta" class="modal-meta">-</p>
+          </div>
+          <div class="modal-header-actions">
+            <button id="deleteAssetFromModalButton" class="button button-danger" type="button">Delete Reference</button>
+            <button id="closeModalButton" class="button button-secondary" type="button">Close</button>
+          </div>
+        </div>
+        <div id="modalBody" class="modal-body"></div>
+      </div>
+    </div>
+
+    <script src="/asset-manager/app.js" defer></script>
+    <script src="/shared/shell.js" defer></script>
+  </body>
+</html>

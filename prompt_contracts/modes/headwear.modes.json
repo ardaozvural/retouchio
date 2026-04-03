@@ -1,0 +1,82 @@
+{
+  "module": "headwear",
+  "supported_modes": ["add", "replace", "preserve", "ignore"],
+
+  "modes": {
+    "add": {
+      "description": "Add a new headwear accessory based on the provided reference.",
+      "enable_rule_groups": [
+        "reference_adaptation",
+        "placement_rules",
+        "coverage_rules",
+        "hair_integration_rules",
+        "garment_occlusion_protection"
+      ],
+      "disable_rule_groups": [
+        "existing_headwear_preservation",
+        "old_headwear_identity_lock"
+      ],
+      "reference_policy": {
+        "source": "headwear_reference",
+        "required": true
+      }
+    },
+
+    "replace": {
+      "description": "Replace existing headwear with the referenced one.",
+      "enable_rule_groups": [
+        "replacement_rules",
+        "reference_adaptation",
+        "placement_rules",
+        "coverage_rules",
+        "hair_integration_rules",
+        "old_headwear_removal_rules",
+        "garment_occlusion_protection"
+      ],
+      "disable_rule_groups": [
+        "existing_headwear_preservation"
+      ],
+      "reference_policy": {
+        "source": "headwear_reference",
+        "required": true
+      }
+    },
+
+    "preserve": {
+      "description": "Keep existing headwear exactly as in the source image.",
+      "enable_rule_groups": [
+        "existing_headwear_preservation",
+        "placement_rules",
+        "coverage_rules"
+      ],
+      "disable_rule_groups": [
+        "replacement_rules",
+        "old_headwear_removal_rules",
+        "reference_adaptation"
+      ],
+      "reference_policy": {
+        "source": "source_image",
+        "required": false
+      }
+    },
+
+    "ignore": {
+      "description": "Do not actively control headwear.",
+      "enable_rule_groups": [],
+      "disable_rule_groups": [
+        "reference_adaptation",
+        "placement_rules",
+        "coverage_rules",
+        "hair_integration_rules",
+        "garment_occlusion_protection",
+        "existing_headwear_preservation",
+        "replacement_rules",
+        "old_headwear_removal_rules"
+      ],
+      "reference_policy": {
+        "source": null,
+        "required": false
+      }
+    }
+  }
+}

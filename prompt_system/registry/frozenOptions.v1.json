@@ -1,0 +1,137 @@
+{
+  "meta": {
+    "registryId": "retouchio_option_registry_v1",
+    "version": "1.0.0",
+    "frozen": true,
+    "frozenAt": "2026-04-01"
+  },
+  "inputSources": [
+    "batch_input"
+  ],
+  "entities": {
+    "subject": {
+      "modes": [
+        "preserve",
+        "ignore"
+      ],
+      "variants": [
+        "identity_reference"
+      ],
+      "referenceIds": [
+        "subject_0001"
+      ]
+    },
+    "garment": {
+      "modes": [
+        "preserve",
+        "restyle",
+        "ignore"
+      ],
+      "variants": [
+        "source_garment"
+      ],
+      "detailRefs": {
+        "material": [
+          "material_detail_0001"
+        ],
+        "pattern": [
+          "pattern_detail_0001"
+        ]
+      }
+    },
+    "footwear": {
+      "modes": [
+        "preserve",
+        "replace",
+        "remove",
+        "ignore"
+      ],
+      "variants": [
+        "sandal"
+      ],
+      "assetIds": [
+        "footwear_0001"
+      ]
+    },
+    "headwear": {
+      "modes": [
+        "add",
+        "replace",
+        "remove",
+        "ignore"
+      ],
+      "variants": [
+        "bandana",
+        "hat",
+        "headband"
+      ],
+      "assetIds": [
+        "headwear_bandana_0001"
+      ]
+    },
+    "accessory": {
+      "modes": [
+        "apply",
+        "ignore"
+      ],
+      "itemModes": [
+        "add",
+        "replace",
+        "remove",
+        "ignore"
+      ],
+      "families": [
+        "eyewear",
+        "bag",
+        "neckwear"
+      ],
+      "variantsByFamily": {
+        "eyewear": [
+          "sunglasses"
+        ],
+        "bag": [
+          "hand_bag"
+        ],
+        "neckwear": [
+          "neck_scarf"
+        ]
+      },
+      "assetIdsByFamily": {
+        "eyewear": [
+          "sunglasses_0001"
+        ],
+        "bag": [
+          "bag_0001"
+        ],
+        "neckwear": [
+          "neck_scarf_0001"
+        ]
+      }
+    },
+    "scene": {
+      "modes": [
+        "apply",
+        "preserve",
+        "ignore"
+      ],
+      "profiles": [
+        "studio_catalog"
+      ]
+    },
+    "output_profile": {
+      "modes": [
+        "apply",
+        "ignore"
+      ],
+      "profiles": [
+        "catalog_4x5_2k"
+      ]
+    },
+    "global_negative_rules": {
+      "modes": [
+        "apply",
+        "ignore"
+      ]
+    }
+  }
+}

@@ -1,0 +1,63 @@
+{
+  "module": "garment",
+  "supported_modes": ["preserve", "restyle", "ignore"],
+
+  "modes": {
+    "preserve": {
+      "description": "Keep the garment exactly as in the source image.",
+      "enable_rule_groups": [
+        "silhouette_lock",
+        "pattern_lock",
+        "fabric_lock",
+        "neckline_lock",
+        "proportion_lock",
+        "occlusion_protection"
+      ],
+      "disable_rule_groups": [
+        "restyle_rules",
+        "fabric_reinterpretation",
+        "pattern_reinterpretation"
+      ],
+      "reference_policy": {
+        "source": "subject_image",
+        "required": true
+      }
+    },
+
+    "restyle": {
+      "description": "Keep the garment identity but allow controlled styling changes.",
+      "enable_rule_groups": [
+        "silhouette_lock",
+        "pattern_lock",
+        "neckline_lock",
+        "controlled_styling_rules"
+      ],
+      "disable_rule_groups": [
+        "fabric_lock_strict",
+        "full_identity_lock"
+      ],
+      "reference_policy": {
+        "source": "subject_image",
+        "required": true
+      }
+    },
+
+    "ignore": {
+      "description": "Do not enforce garment constraints.",
+      "enable_rule_groups": [],
+      "disable_rule_groups": [
+        "silhouette_lock",
+        "pattern_lock",
+        "fabric_lock",
+        "neckline_lock",
+        "proportion_lock",
+        "occlusion_protection",
+        "controlled_styling_rules"
+      ],
+      "reference_policy": {
+        "source": null,
+        "required": false
+      }
+    }
+  }
+}

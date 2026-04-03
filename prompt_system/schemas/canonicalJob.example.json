@@ -1,0 +1,67 @@
+{
+  "version": "2",
+  "jobId": "job_0001_canonical",
+  "displayName": "retouchio-canonical-example",
+  "inputSource": "batch_input",
+  "entities": {
+    "subject": {
+      "mode": "preserve",
+      "reference_id": "subject_0001"
+    },
+    "garment": {
+      "mode": "preserve",
+      "detail_refs": {
+        "material": [],
+        "pattern": []
+      }
+    },
+    "footwear": {
+      "mode": "replace",
+      "variant": "sandal",
+      "asset_id": "footwear_0001"
+    },
+    "headwear": {
+      "mode": "add",
+      "variant": "bandana",
+      "asset_id": "headwear_bandana_0001"
+    },
+    "accessory": {
+      "mode": "apply",
+      "items": [
+        {
+          "family": "eyewear",
+          "variant": "sunglasses",
+          "mode": "add",
+          "asset_id": "sunglasses_0001"
+        },
+        {
+          "family": "bag",
+          "variant": "hand_bag",
+          "mode": "add",
+          "asset_id": "bag_0003"
+        },
+        {
+          "family": "neckwear",
+          "variant": "neck_scarf",
+          "mode": "add",
+          "asset_id": "neck_scarf_0001"
+        }
+      ]
+    },
+    "scene": {
+      "mode": "apply",
+      "profile": "studio_catalog"
+    },
+    "output_profile": {
+      "mode": "apply",
+      "profile": "catalog_4x5_2k"
+    },
+    "global_negative_rules": {
+      "mode": "apply",
+      "items": [
+        "Do not add unrelated props or extra people.",
+        "Do not let accessories cover critical garment zones."
+      ]
+    }
+  }
+}

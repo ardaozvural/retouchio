@@ -1,0 +1,50 @@
+{
+  "module": "footwear",
+  "priority": "critical",
+
+  "invariants": [
+    "Preserve exact footwear product identity",
+    "Preserve exact silhouette and sole shape",
+    "Preserve exact strap layout and attachment logic",
+    "Preserve exact material appearance and finish",
+    "Preserve exact color family and contrast behavior",
+    "Preserve exact branding, printed text, and visible markings when present"
+  ],
+
+  "allowed_transforms": [
+    "Natural perspective adaptation to pose",
+    "Minor contact shadow adjustment",
+    "Subtle lighting adaptation consistent with scene",
+    "Micro scale adaptation only if required by body proportion realism"
+  ],
+
+  "forbidden": [
+    "Any redesign of shoe structure",
+    "Any change in strap topology or closure logic",
+    "Any change in sole thickness or silhouette family",
+    "Any material substitution",
+    "Any color reinterpretation",
+    "Any omission, corruption, or hallucination of branding or printed text",
+    "Any stylization that reduces catalog realism"
+  ],
+
+  "placement_rules": [
+    "Footwear must align naturally with foot pose",
+    "Footwear must maintain believable ground contact",
+    "Left-right pair consistency must be preserved",
+    "Footwear must not float, merge into foot, or deform at contact points"
+  ],
+
+  "reference_policy": {
+    "source": "footwear_reference",
+    "strictness": "absolute",
+    "allow_generalization": false
+  },
+
+  "failure_conditions": [
+    "Product identity drift detected",
+    "Strap structure drift detected",
+    "Sole shape drift detected",
+    "Branding or text corruption detected"
+  ]
+}

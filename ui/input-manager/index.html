@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Retouchio Target Inputs</title>
+    <link rel="stylesheet" href="/input-manager/styles.css" />
+    <link rel="stylesheet" href="/shared/shell.css" />
+  </head>
+  <body data-route="input-manager">
+    <div class="app-shell">
+      <aside class="app-sidebar">
+        <div class="sidebar-title">Retouchio Tools</div>
+        <nav class="sidebar-nav">
+          <a class="nav-link" data-nav-route="job-builder" href="/job-builder">Production Flow</a>
+          <a class="nav-link" data-nav-route="asset-manager" href="/asset-manager">Reference Library</a>
+          <a class="nav-link" data-nav-route="input-manager" href="/input-manager">Target Inputs</a>
+          <a class="nav-link" data-nav-route="batch-jobs" href="/batch-jobs">Batch Jobs</a>
+        </nav>
+        <div class="sidebar-footer">Target input workspace</div>
+      </aside>
+
+      <main class="app-main">
+        <header class="app-page-header">
+          <h1>Target Inputs</h1>
+          <p>Manage the source image sets that move into Production Flow.</p>
+        </header>
+
+        <div class="app-content">
+          <div class="page-shell">
+            <section class="card upload-card">
+              <div class="card-header">
+                <h2>Upload New Input Set</h2>
+                <p>Create a clean target input set for Production Flow. These images are transformed, not used as references.</p>
+              </div>
+              <form id="uploadForm" class="upload-form">
+                <label class="field">
+                  <span>Set Name</span>
+                  <input id="setNameInput" type="text" placeholder="example: catalog_drop_april_01" required />
+                </label>
+                <label class="field field-wide">
+                  <span>Target Images</span>
+                  <input id="filesInput" type="file" accept=".jpg,.jpeg,.png,.webp" multiple required />
+                </label>
+                <p id="filesHint" class="hint">No files selected.</p>
+                <div class="actions">
+                  <button id="uploadButton" class="button button-primary" type="submit">Upload Input Set</button>
+                  <button id="refreshButton" class="button button-secondary" type="button">Refresh Input Sets</button>
+                </div>
+              </form>
+              <div id="statusBanner" class="status-banner" hidden></div>
+            </section>
+
+            <section class="card">
+              <div class="card-header row-between">
+                <div>
+                  <h2>Existing Input Sets</h2>
+                  <p id="summaryLine">Loading input sets...</p>
+                </div>
+              </div>
+              <div id="setGrid" class="set-grid"></div>
+              <div id="emptyState" class="empty-state" hidden>No input sets yet. Upload images to start a new transformation.</div>
+            </section>
+          </div>
+        </div>
+      </main>
+    </div>
+
+    <div id="previewModal" class="modal" hidden>
+      <div id="modalBackdrop" class="modal-backdrop"></div>
+      <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+        <div class="modal-header">
+          <div>
+            <h3 id="modalTitle">Input Set Preview</h3>
+            <p id="modalMeta" class="modal-meta">-</p>
+          </div>
+          <div class="modal-header-actions">
+            <button id="deleteSetFromModalButton" class="button button-danger" type="button">Delete Set</button>
+            <button id="closeModalButton" class="button button-secondary" type="button">Close</button>
+          </div>
+        </div>
+        <div id="modalBody" class="modal-body"></div>
+      </div>
+    </div>
+
+    <script src="/input-manager/app.js" defer></script>
+    <script src="/shared/shell.js" defer></script>
+  </body>
+</html>

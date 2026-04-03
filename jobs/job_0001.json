@@ -1,0 +1,46 @@
+{
+  "jobId": "job_0001",
+  "displayName": "retouchio-bandana-footwear-job-0001",
+
+  "inputSource": "batch_input",
+  "subjectReference": "subject_0001",
+
+  "entities": {
+    "garment": {
+      "mode": "preserve"
+    },
+    "footwear": {
+      "mode": "replace",
+      "reference": "footwear_0001"
+    },
+    "headwear": {
+      "mode": "add",
+      "reference": "headwear_bandana_0001"
+    }
+  },
+
+  "activeSlots": [
+    "headwear_bandana",
+    "footwear"
+  ],
+
+  "selectedAccessoryAssetIds": {
+    "headwear_bandana": [
+      "headwear_bandana_0001"
+    ],
+    "footwear": [
+      "footwear_0001"
+    ]
+  },
+
+  "outputProfile": "catalog_4x5_2k",
+
+  "validator": {
+    "refMaskPath": "validator/real_tests/ref/ref_001.png",
+    "genMaskPath": "validator/real_tests/gen/gen_001.png",
+    "outputJsonPath": "validator/debug/job_0001_validation.json",
+    "threshold": 127,
+    "saveDebug": true,
+    "debugDir": "validator/debug"
+  }
+}
