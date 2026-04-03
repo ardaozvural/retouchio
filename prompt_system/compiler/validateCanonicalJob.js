@@ -14,6 +14,14 @@ const {
   FROZEN_TOP_LEVEL_FIELDS,
 } = require('./schemaConstants');
 
+const INTENT_SOURCES = ['system', 'reference'];
+const INTENT_PLACEMENTS = {
+  footwear: ['on_feet'],
+  headwear: ['auto', 'on_head'],
+  eyewear: ['auto', 'on_eyes', 'on_head', 'in_hand'],
+  bag: ['auto', 'in_hand', 'on_forearm', 'on_shoulder', 'crossbody'],
+};
+
 function ensureArray(value) {
   if (!value) {
     return [];
@@ -32,6 +40,10 @@ function pushInvalidAsset(errors, pathLabel, assetId, check) {
   );
 }
 
+function pushInvalidType(errors, pathLabel, expected) {
+  errors.push(`${pathLabel} must be ${expected}.`);
+}
+
 function validateAssetExists(warnings, pathLabel, assetId, candidateDirs) {
   if (!assetId) {
     return;
@@ -39,6 +51,19 @@ function validateAssetExists(warnings, pathLabel, assetId, candidateDirs) {
 
   if (!hasAssetInCandidateDirs(assetId, candidateDirs)) {
     warnings.push(`${pathLabel}="${assetId}" is not resolvable from refs directories (${candidateDirs.join(', ')}).`);
+  }
+}
+
+function validateIntentField(errors, pathLabel, value, allowed) {
+  if (value === undefined || value === null || value === '') {
+    return;
+  }
+  if (typeof value !== 'string') {
+    pushInvalidType(errors, pathLabel, 'a string');
+    return;
+  }
+  if (!allowed.includes(value)) {
+    pushUnsupported(errors, pathLabel, value, allowed);
   }
 }
 
@@ -53,7 +78,7 @@ function validateCanonicalJob(job, options = {}) {
   const futureHooks = {
     shapeValidation: [
       'footwear presence/absence verification for preserve, replace, and remove modes',
-      'headwear presence/absence verification for add, replace, and remove modes',
+      'headwear presence/absence verification for preserve, add, replace, and remove modes',
     ],
     accessoryExistenceValidation: [
       'family-scoped existence checks for eyewear, bag, and neckwear accessory items',
@@ -161,6 +186,8 @@ function validateCanonicalJob(job, options = {}) {
   if (footwear.variant && footwearVariants.length > 0 && !footwearVariants.includes(footwear.variant)) {
     pushUnsupported(errors, 'footwear.variant', footwear.variant, footwearVariants);
   }
+  validateIntentField(errors, 'footwear.source', footwear.source, INTENT_SOURCES);
+  validateIntentField(errors, 'footwear.placement', footwear.placement, INTENT_PLACEMENTS.footwear);
   if (footwear.mode === 'replace' && !footwear.asset_id && !footwear.variant) {
     errors.push('footwear.mode is replace but both asset_id and variant are empty.');
   }
@@ -195,8 +222,13 @@ function validateCanonicalJob(job, options = {}) {
   if (headwear.variant && headwearVariants.length > 0 && !headwearVariants.includes(headwear.variant)) {
     pushUnsupported(errors, 'headwear.variant', headwear.variant, headwearVariants);
   }
+  validateIntentField(errors, 'headwear.source', headwear.source, INTENT_SOURCES);
+  validateIntentField(errors, 'headwear.placement', headwear.placement, INTENT_PLACEMENTS.headwear);
   if ((headwear.mode === 'add' || headwear.mode === 'replace') && !headwear.asset_id && !headwear.variant) {
     warnings.push(`headwear.mode is ${headwear.mode} but both asset_id and variant are empty.`);
+  }
+  if (headwear.mode === 'preserve' && headwear.asset_id) {
+    warnings.push('headwear.mode is preserve; asset_id is not required and will not override original headwear.');
   }
   if (headwear.mode === 'remove' && headwear.asset_id) {
     errors.push('headwear.mode is remove so asset_id must be empty.');
@@ -234,6 +266,7 @@ function validateCanonicalJob(job, options = {}) {
     if (item.mode && accessoryModes.length > 0 && !accessoryModes.includes(item.mode)) {
       pushUnsupported(errors, `accessory.items[${index}].mode`, item.mode, accessoryModes);
     }
+    validateIntentField(errors, `accessory.items[${index}].source`, item.source, INTENT_SOURCES);
 
     if (item.family && accessoryFamilies.length > 0 && !accessoryFamilies.includes(item.family)) {
       pushUnsupported(errors, `accessory.items[${index}].family`, item.family, accessoryFamilies);
@@ -245,12 +278,19 @@ function validateCanonicalJob(job, options = {}) {
     }
 
     const allowedVariants = registryEntities.accessory?.variantsByFamily?.[item.family] || [];
+    const allowedPlacements = INTENT_PLACEMENTS[item.family] || ['auto'];
+    validateIntentField(errors, `accessory.items[${index}].placement`, item.placement, allowedPlacements);
     if (item.variant && allowedVariants.length > 0 && !allowedVariants.includes(item.variant)) {
       pushUnsupported(errors, `accessory.items[${index}].variant`, item.variant, allowedVariants);
     }
 
     if ((item.mode === 'add' || item.mode === 'replace') && !item.asset_id && !item.variant) {
       warnings.push(`accessory.items[${index}] is ${item.mode} but both asset_id and variant are empty.`);
+    }
+    if (item.mode === 'preserve' && item.asset_id) {
+      warnings.push(
+        `accessory.items[${index}].mode is preserve; asset_id is not required and will not override original ${item.family || 'accessory'}.`
+      );
     }
 
     if (item.mode === 'remove' && item.asset_id) {

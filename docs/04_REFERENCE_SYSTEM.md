@@ -80,7 +80,7 @@ Directory strategy:
 
 Behavior:
 
-- Footwear refs act as exact design authority when footwear mode activates replacement or explicit preservation.
+- Footwear refs act as exact design authority only when footwear is in `replace` mode and canonical `source=reference`.
 - Their authority is limited to footwear.
 
 ### Headwear Refs
@@ -92,7 +92,7 @@ Directory strategy:
 
 Behavior:
 
-- Headwear refs act as exact design authority for headwear.
+- Headwear refs act as exact design authority only when headwear is in `add` or `replace` and canonical `source=reference`.
 - They can influence head styling around the accessory.
 - They must not cause identity drift.
 
@@ -101,22 +101,22 @@ Behavior:
 #### Eyewear
 
 - `refs/accessories/eyewear/<asset_id>/*`
-- Role: styling and design authority for eyewear only
+- Role: styling and design authority for eyewear only when an explicit override mode is active
 
 #### Bag
 
 - `refs/accessories/bag/<asset_id>/*`
-- Role: styling and design authority for bag items only
+- Role: styling and design authority for bag items only when an explicit override mode is active
 
 #### Neckwear
 
 - Preferred: `refs/accessories/neckwear/<asset_id>/*`
 - Compatibility fallback: `refs/accessories/scarf/<asset_id>/*`
-- Role: styling and design authority for neckwear only
+- Role: styling and design authority for neckwear only when an explicit override mode is active
 
 Accessory behavior:
 
-- Accessory refs are family-based styling references.
+- Accessory refs are family-based styling references only when accessory mode is `add` or `replace` with canonical `source=reference`.
 - They must not alter garment silhouette.
 - They must not change subject identity.
 

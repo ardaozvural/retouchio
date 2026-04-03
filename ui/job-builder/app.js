@@ -1,5 +1,6 @@
 const ASSET_BINDING_STORAGE_KEY = 'retouchio.asset_binding.v1';
 const INPUT_SET_BINDING_STORAGE_KEY = 'retouchio.input_set_binding.v1';
+let runtimeState = null;
 
 const state = {
   registry: null,
@@ -64,10 +65,20 @@ const state = {
     refreshBatches: false,
     batchAction: false,
     outputs: false,
+    inlineAssetUpload: false,
+    inlineInputUpload: false,
   },
   ui: createInitialUiState(),
   lastCompileSucceeded: false,
 };
+runtimeState = state;
+
+const COMPILE_INSPECT_TABS = [
+  { id: 'selections', label: 'Selections' },
+  { id: 'canonical-job', label: 'Canonical Job' },
+  { id: 'compile-summary', label: 'Compile Summary' },
+  { id: 'references', label: 'References' },
+];
 
 const elements = {};
 
@@ -89,9 +100,13 @@ function cacheElements() {
     productBeforeImage: document.getElementById('productBeforeImage'),
     productBeforeEmpty: document.getElementById('productBeforeEmpty'),
     productHelperText: document.getElementById('productHelperText'),
+    createInputSetButton: document.getElementById('createInputSetButton'),
     identityModeControl: document.getElementById('identityModeControl'),
     identityModeButtons: Array.from(document.querySelectorAll('[data-identity-mode]')),
     identityHelperText: document.getElementById('identityHelperText'),
+    subjectReferencePickerField: document.getElementById('subjectReferencePickerField'),
+    subjectReferencePicker: document.getElementById('subjectReferencePicker'),
+    subjectReferencePickerHint: document.getElementById('subjectReferencePickerHint'),
     identityReplaceDropzone: document.getElementById('identityReplaceDropzone'),
     identityReferenceInput: document.getElementById('identityReferenceInput'),
     identityReferenceButton: document.getElementById('identityReferenceButton'),
@@ -104,6 +119,12 @@ function cacheElements() {
     stylingAccordion: document.getElementById('stylingAccordion'),
     reviewCards: document.getElementById('reviewCards'),
     reviewSentence: document.getElementById('reviewSentence'),
+    compileInspectPanel: document.getElementById('compileInspectPanel'),
+    compileInspectToggle: document.getElementById('compileInspectToggle'),
+    compileInspectMeta: document.getElementById('compileInspectMeta'),
+    compileInspectBody: document.getElementById('compileInspectBody'),
+    compileInspectTabs: document.getElementById('compileInspectTabs'),
+    compileInspectContent: document.getElementById('compileInspectContent'),
     variationStrip: document.getElementById('variationStrip'),
     heroPreviewLabel: document.getElementById('heroPreviewLabel'),
     heroPreviewCompare: document.getElementById('heroPreviewCompare'),
@@ -261,6 +282,27 @@ function cacheElements() {
     outputsLargeOutputImage: document.getElementById('outputsLargeOutputImage'),
     outputsLargeInputEmpty: document.getElementById('outputsLargeInputEmpty'),
     outputsLargeOutputEmpty: document.getElementById('outputsLargeOutputEmpty'),
+    productionAssetModal: document.getElementById('productionAssetModal'),
+    productionAssetModalBackdrop: document.getElementById('productionAssetModalBackdrop'),
+    productionAssetModalTitle: document.getElementById('productionAssetModalTitle'),
+    productionAssetModalMeta: document.getElementById('productionAssetModalMeta'),
+    productionAssetModalStatus: document.getElementById('productionAssetModalStatus'),
+    productionAssetUploadForm: document.getElementById('productionAssetUploadForm'),
+    productionAssetFamilyLabel: document.getElementById('productionAssetFamilyLabel'),
+    productionAssetVariantLabel: document.getElementById('productionAssetVariantLabel'),
+    productionAssetFilesInput: document.getElementById('productionAssetFilesInput'),
+    productionAssetFilesHint: document.getElementById('productionAssetFilesHint'),
+    productionAssetUploadButton: document.getElementById('productionAssetUploadButton'),
+    closeProductionAssetModalButton: document.getElementById('closeProductionAssetModalButton'),
+    productionInputSetModal: document.getElementById('productionInputSetModal'),
+    productionInputSetModalBackdrop: document.getElementById('productionInputSetModalBackdrop'),
+    productionInputSetModalStatus: document.getElementById('productionInputSetModalStatus'),
+    productionInputSetUploadForm: document.getElementById('productionInputSetUploadForm'),
+    productionInputSetNameInput: document.getElementById('productionInputSetNameInput'),
+    productionInputSetFilesInput: document.getElementById('productionInputSetFilesInput'),
+    productionInputSetFilesHint: document.getElementById('productionInputSetFilesHint'),
+    productionInputSetUploadButton: document.getElementById('productionInputSetUploadButton'),
+    closeProductionInputSetModalButton: document.getElementById('closeProductionInputSetModalButton'),
   });
 }
 
@@ -412,8 +454,56 @@ function bindStaticEvents() {
     });
   }
 
+  elements.createInputSetButton?.addEventListener('click', openInputSetUploadModal);
+  elements.subjectReferencePicker?.addEventListener('change', () => {
+    if (elements.subjectReferenceId) {
+      elements.subjectReferenceId.value = elements.subjectReferencePicker.value || '';
+    }
+    syncStateFromForm();
+    renderVisibleModelShell();
+    renderConnectedResultSystem();
+  });
+
+  elements.productionAssetFilesInput?.addEventListener('change', () => {
+    const count = Array.from(elements.productionAssetFilesInput.files || []).length;
+    if (elements.productionAssetFilesHint) {
+      elements.productionAssetFilesHint.textContent = count > 0
+        ? `${count} file${count === 1 ? '' : 's'} selected.`
+        : 'No files selected.';
+    }
+  });
+  elements.productionAssetUploadForm?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    await uploadAssetFromProductionFlow();
+  });
+  elements.closeProductionAssetModalButton?.addEventListener('click', closeAssetUploadModal);
+  elements.productionAssetModalBackdrop?.addEventListener('click', closeAssetUploadModal);
+
+  elements.productionInputSetFilesInput?.addEventListener('change', () => {
+    const count = Array.from(elements.productionInputSetFilesInput.files || []).length;
+    if (elements.productionInputSetFilesHint) {
+      elements.productionInputSetFilesHint.textContent = count > 0
+        ? `${count} file${count === 1 ? '' : 's'} selected.`
+        : 'No files selected.';
+    }
+  });
+  elements.productionInputSetUploadForm?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    await uploadInputSetFromProductionFlow();
+  });
+  elements.closeProductionInputSetModalButton?.addEventListener('click', closeInputSetUploadModal);
+  elements.productionInputSetModalBackdrop?.addEventListener('click', closeInputSetUploadModal);
+
   document.addEventListener('keydown', (event) => {
     if (event.key !== 'Escape') {
+      return;
+    }
+    if (isAssetUploadModalOpen()) {
+      closeAssetUploadModal();
+      return;
+    }
+    if (isInputSetUploadModalOpen()) {
+      closeInputSetUploadModal();
       return;
     }
     if (state.outputImagePreview.open) {
@@ -564,6 +654,24 @@ function bindVisibleShellEvents() {
     renderHeroPreview();
   });
 
+  elements.compileInspectToggle?.addEventListener('click', () => {
+    state.ui.inspect.open = !state.ui.inspect.open;
+    renderCompileInspectPanel();
+  });
+
+  elements.compileInspectTabs?.addEventListener('click', (event) => {
+    const button = event.target.closest('[data-inspect-tab]');
+    if (!button) {
+      return;
+    }
+    const tabId = String(button.dataset.inspectTab || '').trim();
+    if (!COMPILE_INSPECT_TABS.some((tab) => tab.id === tabId)) {
+      return;
+    }
+    state.ui.inspect.activeTab = tabId;
+    renderCompileInspectPanel();
+  });
+
   elements.approveOutputButton?.addEventListener('click', () => {
     const active = getActiveVariation();
     if (!active) {
@@ -632,7 +740,10 @@ function handleStylingAccordionClick(event) {
 
   const upload = event.target.closest('[data-styling-upload]');
   if (upload) {
-    window.location.assign('/asset-manager');
+    const family = String(upload.dataset.stylingUpload || '').trim();
+    if (family) {
+      openAssetUploadModal(family);
+    }
     return;
   }
 
@@ -658,6 +769,264 @@ function handleVariationStripClick(event) {
   }
   state.ui.results.activeVariationKey = String(button.dataset.variationKey || '');
   renderConnectedResultSystem();
+}
+
+function openAssetUploadModal(family) {
+  const config = getStylingPanelConfig(family);
+  const variant = getUploadVariantForFamily(family, config.variant);
+  state.ui.modals.assetUpload = {
+    open: true,
+    family,
+    variant,
+  };
+
+  if (elements.productionAssetModalTitle) {
+    elements.productionAssetModalTitle.textContent = `Upload ${config.title} Reference`;
+  }
+  if (elements.productionAssetModalMeta) {
+    elements.productionAssetModalMeta.textContent = `Add a ${config.title.toLowerCase()} reference and bind it directly to this styling card.`;
+  }
+  if (elements.productionAssetFamilyLabel) {
+    elements.productionAssetFamilyLabel.value = config.title;
+  }
+  if (elements.productionAssetVariantLabel) {
+    elements.productionAssetVariantLabel.value = formatEnumLabel(variant);
+  }
+  if (elements.productionAssetUploadForm) {
+    elements.productionAssetUploadForm.reset();
+  }
+  if (elements.productionAssetFilesHint) {
+    elements.productionAssetFilesHint.textContent = 'No files selected.';
+  }
+  setInlineModalStatus(elements.productionAssetModalStatus, '', false);
+  updateProductionModalBusyStates();
+  if (elements.productionAssetModal) {
+    elements.productionAssetModal.hidden = false;
+    elements.productionAssetModal.setAttribute('aria-hidden', 'false');
+  }
+}
+
+function closeAssetUploadModal(force = false) {
+  if (!force && state.busy.inlineAssetUpload) {
+    return;
+  }
+  state.ui.modals.assetUpload = {
+    open: false,
+    family: '',
+    variant: '',
+  };
+  if (elements.productionAssetUploadForm) {
+    elements.productionAssetUploadForm.reset();
+  }
+  if (elements.productionAssetFilesHint) {
+    elements.productionAssetFilesHint.textContent = 'No files selected.';
+  }
+  setInlineModalStatus(elements.productionAssetModalStatus, '', false);
+  if (elements.productionAssetModal) {
+    elements.productionAssetModal.hidden = true;
+    elements.productionAssetModal.setAttribute('aria-hidden', 'true');
+  }
+}
+
+function isAssetUploadModalOpen() {
+  return Boolean(state.ui.modals?.assetUpload?.open);
+}
+
+async function uploadAssetFromProductionFlow() {
+  const family = String(state.ui.modals?.assetUpload?.family || '').trim();
+  const variant = String(state.ui.modals?.assetUpload?.variant || '').trim();
+  const files = Array.from(elements.productionAssetFilesInput?.files || []);
+  if (!family || !variant) {
+    setInlineModalStatus(elements.productionAssetModalStatus, 'Choose a styling family first.', true);
+    return;
+  }
+  if (files.length === 0) {
+    setInlineModalStatus(elements.productionAssetModalStatus, 'Select at least one reference image.', true);
+    return;
+  }
+
+  state.busy.inlineAssetUpload = true;
+  updateProductionModalBusyStates();
+  try {
+    const formData = new FormData();
+    formData.set('family', family);
+    formData.set('variant', variant);
+    for (const file of files) {
+      formData.append('files[]', file, file.name);
+    }
+
+    const response = await fetch('/api/assets/upload', {
+      method: 'POST',
+      body: formData,
+    });
+    const payload = await response.json();
+    if (!response.ok) {
+      throw new Error(payload.error || 'Reference upload failed.');
+    }
+
+    await refreshProductionAssetLibrary();
+    applyVisibleStylingSelection(family, 'asset', payload.asset_id);
+    setInlineModalStatus(
+      elements.productionAssetModalStatus,
+      `${payload.asset_id} uploaded and bound to ${getStylingPanelConfig(family).title}.`,
+      false
+    );
+    closeAssetUploadModal(true);
+    showStatus(`Reference uploaded and bound: ${payload.asset_id}.`);
+  } catch (error) {
+    setInlineModalStatus(elements.productionAssetModalStatus, error.message || 'Reference upload failed.', true);
+  } finally {
+    state.busy.inlineAssetUpload = false;
+    updateProductionModalBusyStates();
+  }
+}
+
+function openInputSetUploadModal() {
+  state.ui.modals.inputSetUpload = {
+    open: true,
+  };
+  if (elements.productionInputSetUploadForm) {
+    elements.productionInputSetUploadForm.reset();
+  }
+  if (elements.productionInputSetFilesHint) {
+    elements.productionInputSetFilesHint.textContent = 'No files selected.';
+  }
+  setInlineModalStatus(elements.productionInputSetModalStatus, '', false);
+  updateProductionModalBusyStates();
+  if (elements.productionInputSetModal) {
+    elements.productionInputSetModal.hidden = false;
+    elements.productionInputSetModal.setAttribute('aria-hidden', 'false');
+  }
+}
+
+function closeInputSetUploadModal(force = false) {
+  if (!force && state.busy.inlineInputUpload) {
+    return;
+  }
+  state.ui.modals.inputSetUpload = {
+    open: false,
+  };
+  if (elements.productionInputSetUploadForm) {
+    elements.productionInputSetUploadForm.reset();
+  }
+  if (elements.productionInputSetFilesHint) {
+    elements.productionInputSetFilesHint.textContent = 'No files selected.';
+  }
+  setInlineModalStatus(elements.productionInputSetModalStatus, '', false);
+  if (elements.productionInputSetModal) {
+    elements.productionInputSetModal.hidden = true;
+    elements.productionInputSetModal.setAttribute('aria-hidden', 'true');
+  }
+}
+
+function isInputSetUploadModalOpen() {
+  return Boolean(state.ui.modals?.inputSetUpload?.open);
+}
+
+async function uploadInputSetFromProductionFlow() {
+  const name = String(elements.productionInputSetNameInput?.value || '').trim();
+  const files = Array.from(elements.productionInputSetFilesInput?.files || []);
+  if (!name) {
+    setInlineModalStatus(elements.productionInputSetModalStatus, 'Input set name is required.', true);
+    return;
+  }
+  if (files.length === 0) {
+    setInlineModalStatus(elements.productionInputSetModalStatus, 'Select at least one target image.', true);
+    return;
+  }
+
+  state.busy.inlineInputUpload = true;
+  updateProductionModalBusyStates();
+  try {
+    const formData = new FormData();
+    formData.set('name', name);
+    for (const file of files) {
+      formData.append('files[]', file, file.name);
+    }
+
+    const response = await fetch('/api/inputs/upload', {
+      method: 'POST',
+      body: formData,
+    });
+    const payload = await response.json();
+    if (!response.ok) {
+      throw new Error(payload.error || 'Input set upload failed.');
+    }
+
+    await refreshManagedInputSets();
+    populateSelect(elements.inputSource, getInputSourceOptions(payload.path));
+    elements.inputSource.value = selectOrFirst(payload.path, getInputSourceOptions(payload.path), 'batch_input');
+    syncStateFromForm();
+    closeInputSetUploadModal(true);
+    showStatus(`Input set created and selected: ${payload.name || payload.inputSetId}.`);
+  } catch (error) {
+    setInlineModalStatus(elements.productionInputSetModalStatus, error.message || 'Input set upload failed.', true);
+  } finally {
+    state.busy.inlineInputUpload = false;
+    updateProductionModalBusyStates();
+  }
+}
+
+function updateProductionModalBusyStates() {
+  if (elements.productionAssetUploadButton) {
+    elements.productionAssetUploadButton.disabled = state.busy.inlineAssetUpload;
+    elements.productionAssetUploadButton.textContent = state.busy.inlineAssetUpload ? 'Uploading...' : 'Upload and Bind';
+  }
+  if (elements.closeProductionAssetModalButton) {
+    elements.closeProductionAssetModalButton.disabled = state.busy.inlineAssetUpload;
+  }
+  if (elements.productionAssetFilesInput) {
+    elements.productionAssetFilesInput.disabled = state.busy.inlineAssetUpload;
+  }
+  if (elements.productionInputSetUploadButton) {
+    elements.productionInputSetUploadButton.disabled = state.busy.inlineInputUpload;
+    elements.productionInputSetUploadButton.textContent = state.busy.inlineInputUpload ? 'Creating...' : 'Create and Select';
+  }
+  if (elements.closeProductionInputSetModalButton) {
+    elements.closeProductionInputSetModalButton.disabled = state.busy.inlineInputUpload;
+  }
+  if (elements.productionInputSetNameInput) {
+    elements.productionInputSetNameInput.disabled = state.busy.inlineInputUpload;
+  }
+  if (elements.productionInputSetFilesInput) {
+    elements.productionInputSetFilesInput.disabled = state.busy.inlineInputUpload;
+  }
+}
+
+function setInlineModalStatus(element, message, isError) {
+  if (!element) {
+    return;
+  }
+  element.hidden = !message;
+  element.textContent = message;
+  element.classList.toggle('error', Boolean(isError));
+}
+
+async function refreshProductionAssetLibrary() {
+  const response = await fetch('/api/assets/list');
+  const payload = await response.json();
+  if (!response.ok) {
+    throw new Error(payload.error || 'Failed to refresh reference library.');
+  }
+  state.assetLibrary = {
+    assetsByFamily: payload.assetsByFamily || {},
+  };
+  refreshAssetSelectOptions();
+  renderStylingUiState();
+}
+
+async function refreshManagedInputSets() {
+  const response = await fetch('/api/inputs/list');
+  const payload = await response.json();
+  if (!response.ok) {
+    throw new Error(payload.error || 'Failed to refresh input sets.');
+  }
+  state.managedInputSets = Array.isArray(payload.inputSets) ? payload.inputSets : [];
+  const currentInputSource = String(elements.inputSource?.value || state.job?.inputSource || '').trim();
+  populateSelect(elements.inputSource, getInputSourceOptions(currentInputSource));
+  elements.inputSource.value = selectOrFirst(currentInputSource, getInputSourceOptions(currentInputSource), 'batch_input');
+  renderInputSourceHint();
+  renderInputSourceSummary();
 }
 
 function setIdentityReferencePreview(file) {
@@ -1304,12 +1673,12 @@ function populateStaticOptions() {
   renderInputSourceHint();
   populateSelect(elements.subjectMode, entities.subject?.modes || ['preserve', 'ignore']);
   populateSelect(elements.garmentMode, entities.garment?.modes || ['preserve', 'restyle', 'ignore']);
-  populateLabeledSelect(elements.eyewearAction, ['ignore', 'add', 'replace', 'remove'], getAccessoryActionLabel);
-  populateLabeledSelect(elements.bagAction, ['ignore', 'add', 'replace', 'remove'], getAccessoryActionLabel);
-  populateLabeledSelect(elements.footwearMode, entities.footwear?.modes || ['preserve', 'replace', 'remove', 'ignore'], getFootwearActionLabel);
+  populateLabeledSelect(elements.eyewearAction, getAccessoryItemModes(), getAccessoryActionLabel);
+  populateLabeledSelect(elements.bagAction, getAccessoryItemModes(), getAccessoryActionLabel);
+  populateLabeledSelect(elements.footwearMode, getFootwearUiModes(), getFootwearActionLabel);
   populateLabeledSelect(elements.footwearSource, ['reference', 'system'], getSourceLabel);
   populateSelect(elements.footwearVariant, entities.footwear?.variants || ['sandal']);
-  populateLabeledSelect(elements.headwearMode, entities.headwear?.modes || ['add', 'replace', 'remove', 'ignore'], getAccessoryActionLabel);
+  populateLabeledSelect(elements.headwearMode, getHeadwearUiModes(), getAccessoryActionLabel);
   populateLabeledSelect(elements.headwearSource, ['reference', 'system'], getSourceLabel);
   populateLabeledSelect(elements.headwearPlacement, getPlacementOptions('headwear'), getPlacementLabel);
   populateSelect(elements.headwearVariant, entities.headwear?.variants || ['bandana']);
@@ -1321,14 +1690,23 @@ function populateStaticOptions() {
   populateSelect(elements.globalNegativeMode, entities.global_negative_rules?.modes || ['apply', 'ignore']);
 
   populateSelectWithEmptyState(elements.subjectReferenceId, entities.subject?.referenceIds || [], 'No subject refs found');
+  populateSelectWithEmptyState(elements.subjectReferencePicker, entities.subject?.referenceIds || [], 'No subject refs found');
   populateLabeledSelect(elements.eyewearSource, ['reference', 'system'], getSourceLabel);
   populateLabeledSelect(elements.eyewearPlacement, getPlacementOptions('eyewear'), getPlacementLabel);
   populateLabeledSelect(elements.bagSource, ['reference', 'system'], getSourceLabel);
   populateLabeledSelect(elements.bagPlacement, getPlacementOptions('bag'), getPlacementLabel);
-  elements.eyewearAssetId.innerHTML = renderAssetOptionList(getAccessoryAssets('eyewear'), '', 'No compatible references found');
-  elements.bagAssetId.innerHTML = renderAssetOptionList(getAccessoryAssets('bag'), '', 'No compatible references found');
-  elements.footwearAssetId.innerHTML = renderAssetOptionList(entities.footwear?.assetIds || [], '', 'No compatible references found');
-  elements.headwearAssetId.innerHTML = renderAssetOptionList(entities.headwear?.assetIds || [], '', 'No compatible references found');
+  refreshAssetSelectOptions();
+}
+
+function refreshAssetSelectOptions() {
+  const currentEyewear = elements.eyewearAssetId?.value || '';
+  const currentBag = elements.bagAssetId?.value || '';
+  const currentFootwear = elements.footwearAssetId?.value || '';
+  const currentHeadwear = elements.headwearAssetId?.value || '';
+  elements.eyewearAssetId.innerHTML = renderAssetOptionList(getAccessoryAssets('eyewear'), currentEyewear, 'No compatible references found');
+  elements.bagAssetId.innerHTML = renderAssetOptionList(getAccessoryAssets('bag'), currentBag, 'No compatible references found');
+  elements.footwearAssetId.innerHTML = renderAssetOptionList(getFootwearAssets(), currentFootwear, 'No compatible references found');
+  elements.headwearAssetId.innerHTML = renderAssetOptionList(getHeadwearAssets(), currentHeadwear, 'No compatible references found');
 }
 
 function hydrateForm() {
@@ -1347,31 +1725,34 @@ function hydrateForm() {
 
   elements.subjectMode.value = selectOrFirst(job.entities.subject.mode, state.registry?.entities?.subject?.modes || ['preserve']);
   elements.subjectReferenceId.value = selectOrFirst(job.entities.subject.reference_id, getSubjectReferences(), '');
+  if (elements.subjectReferencePicker) {
+    elements.subjectReferencePicker.value = selectOrFirst(job.entities.subject.reference_id, getSubjectReferences(), '');
+  }
 
   elements.garmentMode.value = selectOrFirst(job.entities.garment.mode, state.registry?.entities?.garment?.modes || ['preserve']);
   elements.garmentMaterialRefs.value = stringifyList(job.entities.garment.detail_refs.material);
   elements.garmentPatternRefs.value = stringifyList(job.entities.garment.detail_refs.pattern);
 
-  elements.footwearMode.value = selectOrFirst(job.entities.footwear.mode, state.registry?.entities?.footwear?.modes || ['preserve']);
-  elements.footwearSource.value = job.entities.footwear.asset_id ? 'reference' : 'system';
+  elements.footwearMode.value = normalizeFootwearUiMode(job.entities.footwear.mode);
+  elements.footwearSource.value = inferSourceFromEntity(job.entities.footwear, footwearModeUsesReference);
   elements.footwearVariant.value = selectOrFirst(job.entities.footwear.variant, state.registry?.entities?.footwear?.variants || ['sandal']);
   elements.footwearAssetId.value = selectOrValueOrEmpty(job.entities.footwear.asset_id, getFootwearAssets());
 
-  elements.headwearMode.value = selectOrFirst(job.entities.headwear.mode, state.registry?.entities?.headwear?.modes || ['add']);
-  elements.headwearSource.value = job.entities.headwear.asset_id ? 'reference' : 'system';
-  elements.headwearPlacement.value = selectOrFirst(elements.headwearPlacement?.value, getPlacementOptions('headwear'), 'auto');
+  elements.headwearMode.value = normalizeHeadwearUiMode(job.entities.headwear.mode);
+  elements.headwearSource.value = inferSourceFromEntity(job.entities.headwear, headwearModeUsesReference);
+  elements.headwearPlacement.value = normalizePlacementValue('headwear', job.entities.headwear.placement);
   elements.headwearVariant.value = selectOrFirst(job.entities.headwear.variant, state.registry?.entities?.headwear?.variants || ['bandana']);
   elements.headwearAssetId.value = selectOrValueOrEmpty(job.entities.headwear.asset_id, getHeadwearAssets());
 
   const eyewearItem = getPrimaryAccessoryItem(job, 'eyewear');
   const bagItem = getPrimaryAccessoryItem(job, 'bag');
-  elements.eyewearAction.value = selectOrFirst(eyewearItem.mode, ['ignore', 'add', 'replace', 'remove'], 'ignore');
-  elements.eyewearSource.value = eyewearItem.asset_id ? 'reference' : 'system';
-  elements.eyewearPlacement.value = selectOrFirst(elements.eyewearPlacement?.value, getPlacementOptions('eyewear'), 'auto');
+  elements.eyewearAction.value = normalizeAccessoryItemUiMode(eyewearItem.mode);
+  elements.eyewearSource.value = eyewearItem.source;
+  elements.eyewearPlacement.value = normalizePlacementValue('eyewear', eyewearItem.placement);
   elements.eyewearAssetId.value = selectOrValueOrEmpty(eyewearItem.asset_id, getAccessoryAssets('eyewear'));
-  elements.bagAction.value = selectOrFirst(bagItem.mode, ['ignore', 'add', 'replace', 'remove'], 'ignore');
-  elements.bagSource.value = bagItem.asset_id ? 'reference' : 'system';
-  elements.bagPlacement.value = selectOrFirst(elements.bagPlacement?.value, getPlacementOptions('bag'), 'auto');
+  elements.bagAction.value = normalizeAccessoryItemUiMode(bagItem.mode);
+  elements.bagSource.value = bagItem.source;
+  elements.bagPlacement.value = normalizePlacementValue('bag', bagItem.placement);
   elements.bagAssetId.value = selectOrValueOrEmpty(bagItem.asset_id, getAccessoryAssets('bag'));
 
   elements.accessoryMode.value = selectOrFirst(job.entities.accessory.mode, state.registry?.entities?.accessory?.modes || ['apply']);
@@ -1402,18 +1783,20 @@ function hydrateForm() {
 function syncStateFromForm() {
   const accessoryItems = state.job.entities.accessory.items || [];
   const footwearMode = elements.footwearMode.value;
-  const footwearSource = elements.footwearSource?.value || 'reference';
+  const footwearSource = footwearModeUsesReference(footwearMode)
+    ? normalizeSourceValue(elements.footwearSource?.value, Boolean(elements.footwearAssetId?.value))
+    : 'system';
   const headwearMode = elements.headwearMode.value;
-  const headwearSource = elements.headwearSource?.value || 'reference';
+  const headwearSource = headwearModeUsesReference(headwearMode)
+    ? normalizeSourceValue(elements.headwearSource?.value, Boolean(elements.headwearAssetId?.value))
+    : 'system';
   const primaryAccessoryItems = [
     buildPrimaryAccessoryItem('eyewear'),
     buildPrimaryAccessoryItem('bag'),
   ];
   const extraAccessoryItems = getAdditionalAccessoryItems(accessoryItems).map(({ item }) => item);
-  const nextAccessoryItems = primaryAccessoryItems.concat(normalizeAccessoryItemsForUi(extraAccessoryItems));
-  const nextAccessoryMode = nextAccessoryItems.some((item) => ['add', 'replace', 'remove'].includes(item?.mode))
-    ? 'apply'
-    : (elements.accessoryMode.value || state.job.entities.accessory.mode || 'apply');
+  const nextAccessoryItems = primaryAccessoryItems.concat(normalizeAccessoryItemsForUi(extraAccessoryItems, { ensurePrimaryFamilies: false }));
+  const nextAccessoryMode = 'apply';
 
   state.job = mergeDefaultJob({
     ...state.job,
@@ -1439,14 +1822,18 @@ function syncStateFromForm() {
       footwear: {
         ...state.job.entities.footwear,
         mode: footwearMode,
+        source: footwearSource,
+        placement: 'on_feet',
         variant: elements.footwearVariant.value,
-        asset_id: footwearMode === 'replace' && footwearSource === 'reference' ? elements.footwearAssetId.value : '',
+        asset_id: footwearModeUsesReference(footwearMode) && footwearSource === 'reference' ? elements.footwearAssetId.value : '',
       },
       headwear: {
         ...state.job.entities.headwear,
         mode: headwearMode,
+        source: headwearSource,
+        placement: normalizePlacementValue('headwear', elements.headwearPlacement?.value),
         variant: elements.headwearVariant.value,
-        asset_id: (headwearMode === 'add' || headwearMode === 'replace') && headwearSource === 'reference'
+        asset_id: headwearModeUsesReference(headwearMode) && headwearSource === 'reference'
           ? elements.headwearAssetId.value
           : '',
       },
@@ -1497,9 +1884,9 @@ function renderAccessoryItem(item, index) {
   const mode = selectOrFirst(item.mode, modes);
   const draft = getAccessoryItemDraft(item, index, family);
   const selectedVariant = selectOrFirst(draft.variant || item.variant, variants, variants[0] || family);
-  const source = draft.source || inferSourceFromItem(item);
+  const source = draft.source;
   const placementOptions = getPlacementOptions(family);
-  const placement = selectOrFirst(draft.placement, placementOptions, 'auto');
+  const placement = normalizePlacementValue(family, draft.placement);
   const usesPlacement = placementOptions.length > 1;
   const usesReference = accessoryModeUsesReference(mode) && source === 'reference';
   const assetValue = selectOrValueOrEmpty(draft.asset_id || item.asset_id, assetOptions);
@@ -1544,7 +1931,7 @@ function renderAccessoryItem(item, index) {
               <select data-accessory-field="placement" data-index="${index}">
                 ${renderLabeledOptionList(placementOptions, placement, getPlacementLabel)}
               </select>
-              <p class="field-hint">UI planning only for now.</p>
+              <p class="field-hint">Persisted as canonical intent for compile-time placement behavior.</p>
             </label>
           ` : ''}
           ${supportsVariantControl ? `
@@ -1566,6 +1953,22 @@ function renderAccessoryItem(item, index) {
       </div>
     </section>
   `;
+}
+
+function applyAccessoryDraftToCanonicalItem(item, index, familyOverride = null) {
+  const family = selectOrFirst(familyOverride || item?.family, getAccessoryFamilies());
+  const draft = getAccessoryItemDraft(item, index, family);
+  const assets = getAccessoryAssets(family);
+  item.mode = normalizeAccessoryItemUiMode(item.mode);
+  item.family = family;
+  item.variant = selectOrFirst(draft.variant || item.variant, getAccessoryVariants(family), getAccessoryVariants(family)[0] || family);
+  item.source = accessoryModeUsesReference(item.mode)
+    ? normalizeSourceValue(draft.source, Boolean(draft.asset_id || item.asset_id))
+    : 'system';
+  item.placement = normalizePlacementValue(family, draft.placement || item.placement);
+  item.asset_id = accessoryModeUsesReference(item.mode) && item.source === 'reference'
+    ? selectOrValueOrEmpty(draft.asset_id || item.asset_id, assets)
+    : '';
 }
 
 function handleAccessoryInput(event) {
@@ -1591,10 +1994,11 @@ function handleAccessoryInput(event) {
     draft.family = item.family;
     draft.variant = selectOrFirst(draft.variant || item.variant, variants);
     draft.asset_id = selectOrValueOrEmpty(draft.asset_id || item.asset_id, assets);
-    draft.source = draft.asset_id ? 'reference' : 'system';
-    draft.placement = selectOrFirst(draft.placement, placementOptions, 'auto');
-    item.variant = draft.variant;
-    item.asset_id = accessoryModeUsesReference(item.mode) && draft.source === 'reference' ? draft.asset_id : '';
+    draft.source = accessoryModeUsesReference(item.mode)
+      ? normalizeSourceValue(draft.source, Boolean(draft.asset_id))
+      : 'system';
+    draft.placement = normalizePlacementValue(item.family, draft.placement || item.placement || placementOptions[0]);
+    applyAccessoryDraftToCanonicalItem(item, index, item.family);
     renderAccessoryItems();
     renderStylingUiState();
     return;
@@ -1602,11 +2006,11 @@ function handleAccessoryInput(event) {
 
   if (field === 'variant' || field === 'asset_id' || field === 'source' || field === 'placement') {
     const draft = getAccessoryItemDraft(item, index, item.family);
-    draft[field] = target.value;
+    draft[field] = field === 'placement'
+      ? normalizePlacementValue(item.family, target.value)
+      : target.value;
+    applyAccessoryDraftToCanonicalItem(item, index, item.family);
     if (field === 'source') {
-      item.asset_id = target.value === 'reference'
-        ? selectOrValueOrEmpty(draft.asset_id || item.asset_id, getAccessoryAssets(item.family))
-        : '';
       renderAccessoryItems();
       renderStylingUiState();
       return;
@@ -1624,11 +2028,13 @@ function handleAccessoryInput(event) {
 
   item[field] = target.value;
   if (field === 'mode') {
+    item.mode = normalizeAccessoryItemUiMode(item.mode);
     const draft = getAccessoryItemDraft(item, index, item.family);
-    item.variant = selectOrFirst(draft.variant || item.variant, getAccessoryVariants(item.family));
-    item.asset_id = accessoryModeUsesReference(item.mode) && (draft.source || inferSourceFromItem(item)) === 'reference'
-      ? selectOrValueOrEmpty(draft.asset_id || item.asset_id, getAccessoryAssets(item.family))
-      : '';
+    draft.source = accessoryModeUsesReference(item.mode)
+      ? normalizeSourceValue(draft.source, Boolean(draft.asset_id || item.asset_id))
+      : 'system';
+    draft.placement = normalizePlacementValue(item.family, draft.placement || item.placement);
+    applyAccessoryDraftToCanonicalItem(item, index, item.family);
     renderAccessoryItems();
     renderStylingUiState();
     return;
@@ -1823,7 +2229,7 @@ async function runBatch() {
     };
     renderRunStatus();
     const completionMessage = payload.success
-      ? `Batch run completed. Open /batch-jobs to monitor status, download outputs, and review results.`
+      ? 'Batch run completed. Use Batch Jobs to monitor status, download outputs, and review results.'
       : 'Batch run failed.';
     showStatus(completionMessage, !payload.success);
   } catch (error) {
@@ -2020,8 +2426,8 @@ function syncWorkflowTypeWithJob() {
 
 function deriveWorkflowType(job) {
   const nextJob = mergeDefaultJob(job);
-  const footwearMode = nextJob.entities?.footwear?.mode || 'ignore';
-  const headwearMode = nextJob.entities?.headwear?.mode || 'ignore';
+  const footwearMode = normalizeFootwearUiMode(nextJob.entities?.footwear?.mode);
+  const headwearMode = normalizeHeadwearUiMode(nextJob.entities?.headwear?.mode);
   const accessoryItems = Array.isArray(nextJob.entities?.accessory?.items) ? nextJob.entities.accessory.items : [];
   const hasStyling = footwearMode === 'replace'
     || footwearMode === 'remove'
@@ -2085,8 +2491,11 @@ function renderWorkflowUi() {
 }
 
 function renderStylingUiState() {
-  const footwearMode = elements.footwearMode?.value || 'ignore';
-  const footwearSource = elements.footwearSource?.value || 'reference';
+  const footwearMode = normalizeFootwearUiMode(elements.footwearMode?.value);
+  const footwearSource = normalizeSourceValue(
+    elements.footwearSource?.value,
+    footwearModeUsesReference(footwearMode) && Boolean(elements.footwearAssetId?.value)
+  );
   const footwearIsActive = footwearMode === 'replace';
   const footwearUsesReference = footwearIsActive && footwearSource === 'reference';
   elements.footwearSource.disabled = !footwearIsActive;
@@ -2097,7 +2506,7 @@ function renderStylingUiState() {
   elements.footwearVariantField.classList.toggle('is-disabled', !footwearIsActive);
   elements.footwearAssetField.classList.toggle('is-disabled', !footwearUsesReference);
   elements.footwearAssetField.classList.toggle('is-hidden', !footwearUsesReference);
-  elements.footwearCard?.classList.toggle('is-passive', footwearMode === 'ignore');
+  elements.footwearCard?.classList.toggle('is-passive', false);
   elements.footwearModeHint.textContent = getFootwearModeHint(footwearMode);
   if (elements.footwearAssetHint) {
     elements.footwearAssetHint.textContent = footwearUsesReference && getFootwearAssets().length === 0
@@ -2105,8 +2514,11 @@ function renderStylingUiState() {
       : '';
   }
 
-  const headwearMode = elements.headwearMode?.value || 'ignore';
-  const headwearSource = elements.headwearSource?.value || 'reference';
+  const headwearMode = normalizeHeadwearUiMode(elements.headwearMode?.value);
+  const headwearSource = normalizeSourceValue(
+    elements.headwearSource?.value,
+    headwearModeUsesReference(headwearMode) && Boolean(elements.headwearAssetId?.value)
+  );
   const headwearIsActive = headwearMode === 'add' || headwearMode === 'replace';
   const headwearUsesReference = headwearIsActive && headwearSource === 'reference';
   elements.headwearSource.disabled = !headwearIsActive;
@@ -2119,7 +2531,7 @@ function renderStylingUiState() {
   elements.headwearVariantField.classList.toggle('is-disabled', !headwearIsActive);
   elements.headwearAssetField.classList.toggle('is-disabled', !headwearUsesReference);
   elements.headwearAssetField.classList.toggle('is-hidden', !headwearUsesReference);
-  elements.headwearCard?.classList.toggle('is-passive', headwearMode === 'ignore');
+  elements.headwearCard?.classList.toggle('is-passive', false);
   elements.headwearModeHint.textContent = getHeadwearModeHint(headwearMode);
   if (elements.headwearAssetHint) {
     elements.headwearAssetHint.textContent = headwearUsesReference && getHeadwearAssets().length === 0
@@ -2534,8 +2946,12 @@ function injectAssetBinding(binding) {
 
   if (family === 'footwear') {
     const entity = job.entities.footwear;
-    if (!entity.mode || entity.mode === 'ignore') {
+    if (!footwearModeUsesReference(entity.mode)) {
       entity.mode = 'replace';
+      changed = true;
+    }
+    if (entity.source !== 'reference') {
+      entity.source = 'reference';
       changed = true;
     }
     if (entity.asset_id !== assetId) {
@@ -2559,8 +2975,12 @@ function injectAssetBinding(binding) {
 
   if (family === 'headwear') {
     const entity = job.entities.headwear;
-    if (!entity.mode || entity.mode === 'ignore') {
+    if (!headwearModeUsesReference(entity.mode)) {
       entity.mode = 'add';
+      changed = true;
+    }
+    if (entity.source !== 'reference') {
+      entity.source = 'reference';
       changed = true;
     }
     if (entity.asset_id !== assetId) {
@@ -2590,7 +3010,12 @@ function injectAssetBinding(binding) {
     }
 
     const items = Array.isArray(accessory.items) ? accessory.items : [];
-    const identical = items.find((item) => item?.family === family && item?.asset_id === assetId);
+    const identical = items.find((item) => (
+      item?.family === family
+      && item?.asset_id === assetId
+      && accessoryModeUsesReference(item?.mode)
+      && item?.source === 'reference'
+    ));
     if (identical) {
       state.job = job;
       return {
@@ -2616,8 +3041,12 @@ function injectAssetBinding(binding) {
         current.variant = resolvedVariant;
         changed = true;
       }
-      if (!current.mode || current.mode === 'ignore') {
+      if (!accessoryModeUsesReference(current.mode)) {
         current.mode = 'add';
+        changed = true;
+      }
+      if (current.source !== 'reference') {
+        current.source = 'reference';
         changed = true;
       }
     } else {
@@ -2625,6 +3054,8 @@ function injectAssetBinding(binding) {
         family,
         variant: resolvedVariant || variant || family,
         mode: 'add',
+        source: 'reference',
+        placement: normalizePlacementValue(family, undefined),
         asset_id: assetId,
       });
       changed = true;
@@ -2821,11 +3252,81 @@ function accessoryModeUsesReference(mode) {
   return mode === 'add' || mode === 'replace';
 }
 
-function normalizeAccessoryItemsForUi(items) {
-  return (Array.isArray(items) ? items : []).map((item) => ({
-    ...item,
-    asset_id: accessoryModeUsesReference(item?.mode) ? String(item?.asset_id || '') : '',
-  }));
+function footwearModeUsesReference(mode) {
+  return mode === 'replace';
+}
+
+function headwearModeUsesReference(mode) {
+  return mode === 'add' || mode === 'replace';
+}
+
+function getFootwearUiModes() {
+  return ['preserve', 'replace', 'remove'];
+}
+
+function getHeadwearUiModes() {
+  return ['preserve', 'add', 'replace', 'remove'];
+}
+
+function normalizeFootwearUiMode(mode) {
+  return mode === 'ignore'
+    ? 'preserve'
+    : selectOrFirst(mode, getFootwearUiModes(), 'preserve');
+}
+
+function normalizeHeadwearUiMode(mode) {
+  return mode === 'ignore'
+    ? 'preserve'
+    : selectOrFirst(mode, getHeadwearUiModes(), 'preserve');
+}
+
+function normalizeAccessoryItemUiMode(mode) {
+  return mode === 'ignore'
+    ? 'preserve'
+    : selectOrFirst(mode, getAccessoryItemModes(), 'preserve');
+}
+
+function normalizeSourceValue(source, fallbackReference) {
+  return source === 'reference' || source === 'system'
+    ? source
+    : (fallbackReference ? 'reference' : 'system');
+}
+
+function getDefaultPlacement(kind) {
+  return kind === 'footwear' ? 'on_feet' : 'auto';
+}
+
+function normalizePlacementValue(kind, placement) {
+  return selectOrFirst(placement, getPlacementOptions(kind), getDefaultPlacement(kind));
+}
+
+function normalizeAccessoryItemsForUi(items, options = {}) {
+  const ensurePrimaryFamilies = options.ensurePrimaryFamilies !== false;
+  const normalizedItems = (Array.isArray(items) ? items : []).map((item) => {
+    const family = selectOrFirst(item?.family, getAccessoryFamilies());
+    const mode = normalizeAccessoryItemUiMode(item?.mode);
+    const normalizedItem = {
+      ...item,
+      family,
+      mode,
+    };
+    return {
+      ...normalizedItem,
+      asset_id: accessoryModeUsesReference(mode) ? String(item?.asset_id || '') : '',
+      source: inferSourceFromItem(normalizedItem),
+      placement: inferPlacementFromItem(normalizedItem, family),
+    };
+  });
+
+  if (!ensurePrimaryFamilies) {
+    return normalizedItems;
+  }
+
+  const primaryItems = ['eyewear', 'bag'].map((family) => (
+    normalizedItems.find((item) => item?.family === family) || createPrimaryAccessoryItem(family)
+  ));
+  const extraItems = getAdditionalAccessoryItems(normalizedItems).map(({ item }) => item);
+  return primaryItems.concat(extraItems);
 }
 
 function hydrateAccessoryDraftsFromJob(job) {
@@ -2838,7 +3339,7 @@ function hydrateAccessoryDraftsFromJob(job) {
       variant: selectOrFirst(item?.variant, getAccessoryVariants(family)),
       asset_id: selectOrValueOrEmpty(item?.asset_id, getAccessoryAssets(family)),
       source: inferSourceFromItem(item),
-      placement: 'auto',
+      placement: inferPlacementFromItem(item, family),
     };
   });
 }
@@ -2854,7 +3355,7 @@ function getAccessoryItemDraft(item, index, familyOverride = null) {
     variant: selectOrFirst(item?.variant, getAccessoryVariants(family)),
     asset_id: selectOrValueOrEmpty(item?.asset_id, getAccessoryAssets(family)),
     source: inferSourceFromItem(item),
-    placement: 'auto',
+    placement: inferPlacementFromItem(item, family),
   };
   state.stylingDrafts.accessoryItems[index] = nextDraft;
   return nextDraft;
@@ -2862,40 +3363,53 @@ function getAccessoryItemDraft(item, index, familyOverride = null) {
 
 function normalizeStylingUiJob(job) {
   const nextJob = mergeDefaultJob(job);
-  if (nextJob.entities.footwear.mode !== 'replace') {
+  nextJob.entities.footwear.mode = normalizeFootwearUiMode(nextJob.entities.footwear.mode);
+  nextJob.entities.headwear.mode = normalizeHeadwearUiMode(nextJob.entities.headwear.mode);
+  const footwearSource = inferSourceFromEntity(nextJob.entities.footwear, footwearModeUsesReference);
+  if (!footwearModeUsesReference(nextJob.entities.footwear.mode) || footwearSource !== 'reference') {
     nextJob.entities.footwear.asset_id = '';
   }
-  if (nextJob.entities.headwear.mode !== 'add' && nextJob.entities.headwear.mode !== 'replace') {
+  nextJob.entities.footwear.source = footwearSource;
+  nextJob.entities.footwear.placement = 'on_feet';
+
+  const headwearSource = inferSourceFromEntity(nextJob.entities.headwear, headwearModeUsesReference);
+  if (!headwearModeUsesReference(nextJob.entities.headwear.mode) || headwearSource !== 'reference') {
     nextJob.entities.headwear.asset_id = '';
   }
+  nextJob.entities.headwear.source = headwearSource;
+  nextJob.entities.headwear.placement = normalizePlacementValue('headwear', nextJob.entities.headwear.placement);
+  nextJob.entities.accessory.mode = 'apply';
   nextJob.entities.accessory.items = normalizeAccessoryItemsForUi(nextJob.entities.accessory.items);
   return nextJob;
 }
 
 function getFootwearModeHint(mode) {
   if (mode === 'replace') {
-    return 'Replace = swap the original footwear with a new styling choice.';
+    return 'Replace = enforce the uploaded footwear reference as override authority.';
   }
   if (mode === 'preserve') {
-    return 'Keep Original = keep the original footwear from the source image.';
+    return 'Keep Original = stay loyal to the footwear state already present in the target image.';
   }
   if (mode === 'remove') {
     return 'Remove = footwear will be removed from the result.';
   }
-  return 'Ignore = system does not control footwear.';
+  return 'Legacy Ignore = preserved as compatibility only; authored jobs should use Keep Original.';
 }
 
 function getHeadwearModeHint(mode) {
+  if (mode === 'preserve') {
+    return 'Preserve = keep the original target-image headwear state, and do not activate uploaded authority.';
+  }
   if (mode === 'add') {
-    return 'Add = introduce headwear into the result.';
+    return 'Add = enforce the uploaded headwear reference as a new addition when reference source is active.';
   }
   if (mode === 'replace') {
-    return 'Replace = swap the current headwear with a new styling choice.';
+    return 'Replace = enforce the uploaded headwear reference as override authority.';
   }
   if (mode === 'remove') {
     return 'Remove = headwear will be removed from the result.';
   }
-  return 'Ignore = system does not control headwear.';
+  return 'Legacy Ignore = preserved as compatibility only; authored jobs should use Preserve.';
 }
 
 function getSubjectReferences() {
@@ -2903,11 +3417,24 @@ function getSubjectReferences() {
 }
 
 function getFootwearAssets() {
-  return state.registry?.entities?.footwear?.assetIds || [];
+  return uniqueStrings([
+    ...(state.registry?.entities?.footwear?.assetIds || []),
+    ...getLibraryAssetIds('footwear'),
+  ]);
 }
 
 function getHeadwearAssets() {
-  return state.registry?.entities?.headwear?.assetIds || [];
+  return uniqueStrings([
+    ...(state.registry?.entities?.headwear?.assetIds || []),
+    ...getLibraryAssetIds('headwear'),
+  ]);
+}
+
+function getLibraryAssetIds(family) {
+  const items = Array.isArray(runtimeState?.assetLibrary?.assetsByFamily?.[family]) ? runtimeState.assetLibrary.assetsByFamily[family] : [];
+  return items
+    .map((item) => String(item?.asset_id || '').trim())
+    .filter(Boolean);
 }
 
 function getInputSourceOptions(extraValue = null) {
@@ -2927,9 +3454,9 @@ function renderInputSourceHint() {
     return;
   }
   if ((state.managedInputSets || []).length > 0) {
-    elements.inputSourceHint.textContent = `Managed input sets available: ${state.managedInputSets.length}.`;
+    elements.inputSourceHint.textContent = `Managed input sets available: ${state.managedInputSets.length}. Create one here or use Manage Input Sets for full administration.`;
   } else {
-    elements.inputSourceHint.textContent = 'No managed input sets found. Create one in Target Inputs (/input-manager).';
+    elements.inputSourceHint.textContent = 'No managed input sets found. Create one here or use Manage Input Sets for the full library.';
   }
 }
 
@@ -3039,6 +3566,17 @@ function renderVisibleModelShell() {
   applySegmentedState(elements.identityModeButtons, state.ui.model.identityMode, 'identityMode');
   if (elements.identityHelperText) {
     elements.identityHelperText.textContent = getIdentityModeHelperText(state.ui.model.identityMode);
+  }
+  if (elements.subjectReferencePickerField) {
+    elements.subjectReferencePickerField.hidden = state.ui.model.identityMode === 'ignore';
+  }
+  if (elements.subjectReferencePicker) {
+    elements.subjectReferencePicker.value = selectOrFirst(elements.subjectReferenceId?.value || '', getSubjectReferences(), '');
+  }
+  if (elements.subjectReferencePickerHint) {
+    elements.subjectReferencePickerHint.textContent = getSubjectReferences().length > 0
+      ? 'Select an existing subject reference without leaving Production Flow.'
+      : 'No managed subject references were found in this workspace.';
   }
   if (elements.identityReplaceDropzone) {
     elements.identityReplaceDropzone.hidden = state.ui.model.identityMode !== 'replace';
@@ -3230,7 +3768,10 @@ function renderStylingAccordionItem(family, isOpen) {
     ? `
       <div class="styling-upload-row">
         <p class="styling-panel-note">${escapeHtml(config.note)}</p>
-        <button class="button button-secondary" type="button" data-styling-upload="${escapeAttribute(family)}">Upload Reference</button>
+        <div class="action-strip production-flow-secondary-actions">
+          <button class="button button-secondary" type="button" data-styling-upload="${escapeAttribute(family)}">Upload Reference</button>
+          <a class="button button-outline" href="/asset-manager">Manage All References</a>
+        </div>
       </div>
     `
     : `<p class="styling-panel-note">${escapeHtml(config.note)}</p>`;
@@ -3308,9 +3849,595 @@ function renderConnectedResultSystem() {
     .join('');
 
   elements.reviewSentence.textContent = buildReviewSentence();
+  renderCompileInspectPanel();
   renderVariationStrip();
   renderHeroPreview();
   renderOutputMeta();
+}
+
+function renderCompileInspectPanel() {
+  if (!elements.compileInspectPanel || !elements.compileInspectToggle || !elements.compileInspectBody
+    || !elements.compileInspectTabs || !elements.compileInspectContent) {
+    return;
+  }
+
+  const isOpen = state.ui.inspect?.open !== false;
+  const activeTab = state.ui.inspect?.activeTab || 'compile-summary';
+
+  elements.compileInspectPanel.classList.toggle('is-collapsed', !isOpen);
+  elements.compileInspectToggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+  elements.compileInspectBody.hidden = !isOpen;
+  elements.compileInspectMeta.innerHTML = renderCompileInspectMeta();
+  elements.compileInspectTabs.innerHTML = COMPILE_INSPECT_TABS
+    .map((tab) => {
+      const isActive = tab.id === activeTab;
+      return `
+        <button
+          type="button"
+          class="inspect-tab-button${isActive ? ' is-active' : ''}"
+          data-inspect-tab="${escapeAttribute(tab.id)}"
+          role="tab"
+          aria-selected="${isActive ? 'true' : 'false'}"
+        >
+          ${escapeHtml(tab.label)}
+        </button>
+      `;
+    })
+    .join('');
+
+  elements.compileInspectContent.innerHTML = renderCompileInspectTab(activeTab);
+}
+
+function renderCompileInspectMeta() {
+  const warnings = state.validation?.warnings || [];
+  const errors = state.validation?.errors || [];
+  const compileValue = state.lastCompileSucceeded ? 'Compiled' : (state.compileError ? 'Compile failed' : 'Draft preview');
+  const compileTone = state.lastCompileSucceeded ? 'ok' : (state.compileError ? 'danger' : 'neutral');
+  const validationValue = errors.length > 0
+    ? `${errors.length} error${errors.length === 1 ? '' : 's'}`
+    : warnings.length > 0
+      ? `${warnings.length} warning${warnings.length === 1 ? '' : 's'}`
+      : 'Clean';
+  const validationTone = errors.length > 0 ? 'danger' : (warnings.length > 0 ? 'warning' : 'ok');
+  const readinessValue = !state.readiness
+    ? 'Dry check pending'
+    : (state.readiness.ready ? 'Dry check ready' : 'Dry check needs review');
+  const readinessTone = !state.readiness ? 'neutral' : (state.readiness.ready ? 'ok' : 'warning');
+
+  return [
+    renderCompileInspectMetaChip('Source', compileValue, compileTone),
+    renderCompileInspectMetaChip('Validation', validationValue, validationTone),
+    renderCompileInspectMetaChip('Dry Check', readinessValue, readinessTone),
+  ].join('');
+}
+
+function renderCompileInspectMetaChip(label, value, tone = 'neutral') {
+  return `
+    <span class="inspect-meta-chip is-${escapeAttribute(tone)}">
+      <span>${escapeHtml(label)}</span>
+      <strong>${escapeHtml(value)}</strong>
+    </span>
+  `;
+}
+
+function renderCompileInspectTab(tabId) {
+  const context = buildCompileInspectContext();
+  if (tabId === 'selections') {
+    return renderCompileInspectSelectionsTab(context);
+  }
+  if (tabId === 'canonical-job') {
+    return renderCompileInspectCanonicalTab(context);
+  }
+  if (tabId === 'references') {
+    return renderCompileInspectReferencesTab(context);
+  }
+  return renderCompileInspectSummaryTab(context);
+}
+
+function buildCompileInspectContext() {
+  const job = state.compiledCanonicalJob || mergeDefaultJob(state.job);
+  const stylingConfigs = getVisibleStylingStateList();
+  const materialRefs = Array.isArray(job.entities?.garment?.detail_refs?.material)
+    ? job.entities.garment.detail_refs.material
+    : [];
+  const patternRefs = Array.isArray(job.entities?.garment?.detail_refs?.pattern)
+    ? job.entities.garment.detail_refs.pattern
+    : [];
+  const boundAssets = getCompileInspectBoundAssets(job, stylingConfigs, materialRefs, patternRefs);
+  const authorityEntries = getCompileInspectAuthorityEntries(job, stylingConfigs, materialRefs, patternRefs);
+  const overrideCount = (state.ui.model.identityMode === 'replace' ? 1 : 0)
+    + (state.ui.productIntent === 'restyle' ? 1 : 0)
+    + stylingConfigs.filter((item) => ['add', 'replace', 'remove'].includes(item.action)).length;
+
+  return {
+    job,
+    stylingConfigs,
+    materialRefs,
+    patternRefs,
+    boundAssets,
+    authorityEntries,
+    resolvedRefCount: getCompileInspectResolvedReferenceCount(job, stylingConfigs, materialRefs, patternRefs),
+    overrideCount,
+  };
+}
+
+function getCompileInspectResolvedReferenceCount(job, stylingConfigs, materialRefs, patternRefs) {
+  const refs = state.readiness?.resolvedRefSummary;
+  if (refs) {
+    return (refs.subject || 0)
+      + (refs.garmentMaterial || 0)
+      + (refs.garmentPattern || 0)
+      + (refs.footwear || 0)
+      + (refs.headwear || 0)
+      + (refs.accessoryFiles || 0);
+  }
+
+  return (job.entities?.subject?.reference_id ? 1 : 0)
+    + materialRefs.length
+    + patternRefs.length
+    + stylingConfigs.filter((config) => config.usesReference && config.assetId).length;
+}
+
+function getCompileInspectBoundAssets(job, stylingConfigs, materialRefs, patternRefs) {
+  const entries = [];
+  const seen = new Set();
+  const pushEntry = (assetId, family, role, note) => {
+    if (!assetId) {
+      return;
+    }
+    const key = `${family}:${assetId}:${role}`;
+    if (seen.has(key)) {
+      return;
+    }
+    seen.add(key);
+    const assetEntry = lookupAssetLibraryEntry(family, assetId);
+    entries.push({
+      assetId,
+      family,
+      role,
+      note,
+      preview: assetEntry?.preview || '',
+      variant: assetEntry?.variant || '',
+    });
+  };
+
+  if (job.entities?.subject?.reference_id) {
+    pushEntry(job.entities.subject.reference_id, 'subject', 'Model', 'Identity authority');
+  }
+
+  materialRefs.forEach((assetId) => {
+    pushEntry(assetId, 'garment_material', 'Material Detail', 'Garment fidelity');
+  });
+  patternRefs.forEach((assetId) => {
+    pushEntry(assetId, 'garment_pattern', 'Pattern Detail', 'Pattern fidelity');
+  });
+
+  stylingConfigs.forEach((config) => {
+    if (!config.usesReference || !config.assetId) {
+      return;
+    }
+    pushEntry(
+      config.assetId,
+      config.family,
+      config.title,
+      `${getSourceLabel(config.source)}${config.placement && config.placement !== 'auto' ? ` • ${getPlacementLabel(config.placement)}` : ''}`
+    );
+  });
+
+  return entries;
+}
+
+function lookupAssetLibraryEntry(family, assetId) {
+  const items = Array.isArray(state.assetLibrary?.assetsByFamily?.[family]) ? state.assetLibrary.assetsByFamily[family] : [];
+  return items.find((item) => item?.asset_id === assetId) || null;
+}
+
+function getCompileInspectAuthorityEntries(job, stylingConfigs, materialRefs, patternRefs) {
+  const entries = [
+    {
+      label: 'Model',
+      value: job.entities?.subject?.reference_id || 'Target input only',
+      note: job.entities?.subject?.reference_id ? 'Separate identity authority' : 'No separate subject reference',
+    },
+    {
+      label: 'Product',
+      value: materialRefs.length > 0 || patternRefs.length > 0
+        ? `${materialRefs.length} material • ${patternRefs.length} pattern`
+        : 'Target garment only',
+      note: materialRefs.length > 0 || patternRefs.length > 0
+        ? 'Detail references reinforce garment fidelity'
+        : 'No extra garment detail references',
+    },
+  ];
+
+  stylingConfigs.forEach((config) => {
+    if (config.action === 'preserve') {
+      entries.push({
+        label: config.title,
+        value: 'Target image',
+        note: 'Original slot state preserved',
+      });
+      return;
+    }
+    if (config.action === 'remove') {
+      entries.push({
+        label: config.title,
+        value: 'Removed',
+        note: 'No authority asset active',
+      });
+      return;
+    }
+    if (config.usesReference && config.assetId) {
+      entries.push({
+        label: config.title,
+        value: config.assetId,
+        note: `${formatEnumLabel(config.action)} authority active`,
+      });
+      return;
+    }
+    if (config.isActionActive) {
+      entries.push({
+        label: config.title,
+        value: 'System selected',
+        note: getCompileInspectDecisionMeta(config),
+      });
+    }
+  });
+
+  return entries;
+}
+
+function renderCompileInspectSelectionsTab(context) {
+  const selectedSet = getSelectedManagedInputSet();
+  const outputMeta = getOutputMeta();
+  const selectionCards = [
+    {
+      label: 'Target Inputs',
+      value: getInputSourceSummaryValue(),
+      summary: selectedSet
+        ? `${selectedSet.fileCount || 0} image${Number(selectedSet.fileCount || 0) === 1 ? '' : 's'} • ${formatDateLabel(selectedSet.createdAt || '-')}`
+        : 'Using the currently selected input source.',
+    },
+    {
+      label: 'Workflow',
+      value: getWorkflowLabel(state.workflowType),
+      summary: 'Controls which authoring sections stay visible in Production Flow.',
+    },
+    {
+      label: 'Model',
+      value: getIdentityModeLabel(state.ui.model.identityMode),
+      summary: summarizeSelectedPills([
+        ...state.ui.model.physicalCorrections,
+        ...state.ui.model.aestheticEnhancements,
+        ...state.ui.model.constraints,
+      ]),
+    },
+    {
+      label: 'Product',
+      value: getProductIntentLabel(state.ui.productIntent),
+      summary: getProductIntentHelperText(state.ui.productIntent),
+    },
+    {
+      label: 'Styling',
+      value: getOverallStylingValue(),
+      summary: getOverallStylingSummary(),
+    },
+    {
+      label: 'Output',
+      value: outputMeta.style,
+      summary: `${outputMeta.resolution} • ${outputMeta.aspect}`,
+    },
+  ];
+
+  return `
+    <div class="inspect-card-grid">
+      ${selectionCards.map((item) => `
+        <article class="inspect-card">
+          <span class="inspect-card-label">${escapeHtml(item.label)}</span>
+          <p class="inspect-card-value">${escapeHtml(item.value)}</p>
+          <p class="inspect-card-copy">${escapeHtml(item.summary)}</p>
+        </article>
+      `).join('')}
+    </div>
+  `;
+}
+
+function renderCompileInspectCanonicalTab(context) {
+  const sourceLabel = state.compiledCanonicalJob ? 'Compiled canonical job' : 'Live authored preview';
+  const sourceTone = state.compiledCanonicalJob ? 'ok' : 'neutral';
+  const sourceCopy = state.compiledCanonicalJob
+    ? 'Showing the latest compiled canonical job returned by the backend.'
+    : 'Compile to confirm the fully resolved canonical job. Until then this is the authored Production Flow state.';
+
+  return `
+    <div class="inspect-json-shell">
+      <div class="inspect-json-meta">
+        ${renderInspectBadge(sourceLabel, sourceTone)}
+        <p class="inspect-json-copy">${escapeHtml(sourceCopy)}</p>
+      </div>
+      <pre class="inspect-json-block"><code>${escapeHtml(JSON.stringify(context.job, null, 2))}</code></pre>
+    </div>
+  `;
+}
+
+function renderCompileInspectSummaryTab(context) {
+  const entityEntries = getCompileInspectEntityEntries(context);
+  const decisionEntries = context.stylingConfigs.map((config) => ({
+    label: config.title,
+    mode: formatEnumLabel(config.action),
+    tone: getInspectToneForAction(config.action),
+    meta: getCompileInspectDecisionMeta(config),
+  }));
+  const statusEntries = getCompileInspectStatusEntries(context);
+
+  return `
+    <div class="inspect-summary-grid">
+      <article class="inspect-summary-card">
+        <div class="inspect-card-heading">
+          <h4>Active Entities</h4>
+          <p>Quick scan of what is participating in the current run.</p>
+        </div>
+        <div class="inspect-list">
+          ${entityEntries.map((entry) => `
+            <div class="inspect-row">
+              <div class="inspect-row-copy">
+                <span class="inspect-row-label">${escapeHtml(entry.label)}</span>
+                <p class="inspect-row-meta">${escapeHtml(entry.note)}</p>
+              </div>
+              ${renderInspectBadge(entry.state, entry.tone)}
+            </div>
+          `).join('')}
+        </div>
+      </article>
+
+      <article class="inspect-summary-card">
+        <div class="inspect-card-heading">
+          <h4>Mode + Source / Placement</h4>
+          <p>Compact slot decisions, grouped so preserve and override behavior read clearly.</p>
+        </div>
+        <div class="inspect-list">
+          ${decisionEntries.map((entry) => `
+            <div class="inspect-row">
+              <div class="inspect-row-copy">
+                <span class="inspect-row-label">${escapeHtml(entry.label)}</span>
+                <p class="inspect-row-meta">${escapeHtml(entry.meta)}</p>
+              </div>
+              ${renderInspectBadge(entry.mode, entry.tone)}
+            </div>
+          `).join('')}
+        </div>
+      </article>
+
+      <article class="inspect-summary-card inspect-summary-card-authority">
+        <div class="inspect-card-heading">
+          <h4>Reference Authority + Bound Assets</h4>
+          <p>Where authority comes from, paired with the compact asset list that is actually in play.</p>
+        </div>
+        <div class="inspect-authority-grid">
+          <section class="inspect-subsection">
+            <p class="inspect-subsection-label">Reference Authority</p>
+            <div class="inspect-list">
+              ${context.authorityEntries.map((entry) => `
+                <div class="inspect-row inspect-row-compact">
+                  <div class="inspect-row-copy">
+                    <span class="inspect-row-label">${escapeHtml(entry.label)}</span>
+                    <p class="inspect-row-meta">${escapeHtml(entry.note)}</p>
+                  </div>
+                  <span class="inspect-inline-value">${escapeHtml(entry.value)}</span>
+                </div>
+              `).join('')}
+            </div>
+          </section>
+
+          <section class="inspect-subsection">
+            <p class="inspect-subsection-label">Bound Assets</p>
+            ${context.boundAssets.length > 0 ? `
+              <div class="inspect-asset-list">
+                ${context.boundAssets.map((asset) => renderCompileInspectAssetRow(asset)).join('')}
+              </div>
+            ` : '<div class="inspect-empty-state">No external assets are bound for the current authored state.</div>'}
+          </section>
+        </div>
+      </article>
+
+      <article class="inspect-summary-card inspect-summary-card-status">
+        <div class="inspect-card-heading">
+          <h4>Compile Notes / Status</h4>
+          <p>Short technical checks designed for quick confidence, not a raw developer console.</p>
+        </div>
+        <div class="inspect-status-list">
+          ${statusEntries.map((entry) => `
+            <div class="inspect-status-item">
+              <span class="inspect-status-dot is-${escapeAttribute(entry.tone)}"></span>
+              <div class="inspect-status-copy">
+                <strong>${escapeHtml(entry.label)}</strong>
+                <p>${escapeHtml(entry.copy)}</p>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      </article>
+    </div>
+  `;
+}
+
+function renderCompileInspectReferencesTab(context) {
+  const refs = state.readiness?.resolvedRefSummary || null;
+  const resolvedCards = [
+    ['Resolved refs', String(context.resolvedRefCount)],
+    ['Authority entries', String(context.authorityEntries.length)],
+    ['Bound assets', String(context.boundAssets.length)],
+  ];
+
+  if (refs) {
+    resolvedCards.push(['Dry-check subject refs', String(refs.subject || 0)]);
+    resolvedCards.push(['Dry-check accessory refs', String(refs.accessoryFiles || 0)]);
+  }
+
+  return `
+    <div class="inspect-reference-grid">
+      <article class="inspect-card">
+        <div class="inspect-card-heading">
+          <h4>Reference Counts</h4>
+          <p>Resolved or inferred counts available from the current compile and dry-check state.</p>
+        </div>
+        <div class="inspect-mini-stats">
+          ${resolvedCards.map(([label, value]) => `
+            <div class="inspect-mini-stat">
+              <span>${escapeHtml(label)}</span>
+              <strong>${escapeHtml(value)}</strong>
+            </div>
+          `).join('')}
+        </div>
+      </article>
+
+      <article class="inspect-card">
+        <div class="inspect-card-heading">
+          <h4>Authority Map</h4>
+          <p>Preserve states stay loyal to the target image. Override modes are the only ones that activate uploaded authority.</p>
+        </div>
+        <div class="inspect-list">
+          ${context.authorityEntries.map((entry) => `
+            <div class="inspect-row inspect-row-compact">
+              <div class="inspect-row-copy">
+                <span class="inspect-row-label">${escapeHtml(entry.label)}</span>
+                <p class="inspect-row-meta">${escapeHtml(entry.note)}</p>
+              </div>
+              <span class="inspect-inline-value">${escapeHtml(entry.value)}</span>
+            </div>
+          `).join('')}
+        </div>
+      </article>
+
+      <article class="inspect-card">
+        <div class="inspect-card-heading">
+          <h4>Assets In Play</h4>
+          <p>Compact preview of the bound files currently influencing compile behavior.</p>
+        </div>
+        ${context.boundAssets.length > 0 ? `
+          <div class="inspect-asset-list">
+            ${context.boundAssets.map((asset) => renderCompileInspectAssetRow(asset)).join('')}
+          </div>
+        ` : '<div class="inspect-empty-state">No external reference assets are active right now.</div>'}
+      </article>
+    </div>
+  `;
+}
+
+function getCompileInspectEntityEntries(context) {
+  return [
+    {
+      label: 'Model',
+      state: 'Active',
+      tone: state.ui.model.identityMode === 'replace' ? 'accent' : 'neutral',
+      note: `${getIdentityModeLabel(state.ui.model.identityMode)}${context.job.entities?.subject?.reference_id ? ` • ${context.job.entities.subject.reference_id}` : ''}`,
+    },
+    {
+      label: 'Product',
+      state: 'Active',
+      tone: state.ui.productIntent === 'restyle' ? 'warning' : 'neutral',
+      note: `${getProductIntentLabel(state.ui.productIntent)} • ${context.job.entities?.garment?.mode || 'preserve'}`,
+    },
+    ...context.stylingConfigs.map((config) => ({
+      label: config.title,
+      state: config.action === 'remove' ? 'Removed' : (config.action === 'preserve' ? 'Preserved' : 'Active'),
+      tone: config.action === 'remove' ? 'danger' : (config.action === 'preserve' ? 'neutral' : 'accent'),
+      note: formatEnumLabel(config.action),
+    })),
+  ];
+}
+
+function getCompileInspectDecisionMeta(config) {
+  if (config.action === 'preserve') {
+    return 'Target image loyalty only. Uploaded authority stays inactive.';
+  }
+  if (config.action === 'remove') {
+    return 'Removed from the result. No source or placement authority is active.';
+  }
+
+  const parts = [
+    config.source === 'reference' ? 'Reference authority' : 'System selected',
+  ];
+  if (config.placement && config.placement !== 'auto') {
+    parts.push(getPlacementLabel(config.placement));
+  } else if (config.placementOptions.length > 1) {
+    parts.push('Auto placement');
+  }
+  return parts.join(' • ');
+}
+
+function getCompileInspectStatusEntries(context) {
+  const validationErrors = state.validation?.errors || [];
+  const validationWarnings = state.validation?.warnings || [];
+  const readinessErrors = state.readiness?.errors || [];
+  const readinessWarnings = state.readiness?.warnings || [];
+  const conflictErrors = validationErrors.length + readinessErrors.length;
+  const conflictWarnings = validationWarnings.length + readinessWarnings.length;
+
+  return [
+    {
+      label: 'Resolved references',
+      copy: context.resolvedRefCount > 0
+        ? `${context.resolvedRefCount} reference${context.resolvedRefCount === 1 ? '' : 's'} resolved or staged for this run.`
+        : 'No external references resolved yet. Compile and dry check to confirm the final set.',
+      tone: context.resolvedRefCount > 0 ? 'ok' : 'neutral',
+    },
+    {
+      label: 'Conflicts',
+      copy: conflictErrors > 0
+        ? `${conflictErrors} blocking issue${conflictErrors === 1 ? '' : 's'} detected across compile and dry check.`
+        : conflictWarnings > 0
+          ? `${conflictWarnings} warning${conflictWarnings === 1 ? '' : 's'} detected.`
+          : 'No conflicts detected.',
+      tone: conflictErrors > 0 ? 'danger' : (conflictWarnings > 0 ? 'warning' : 'ok'),
+    },
+    {
+      label: 'Override rules',
+      copy: context.overrideCount > 0
+        ? `${context.overrideCount} explicit override rule${context.overrideCount === 1 ? '' : 's'} applied.`
+        : 'Current authored state stays loyal to the original target image.',
+      tone: context.overrideCount > 0 ? 'accent' : 'neutral',
+    },
+    {
+      label: 'Prompt assembly',
+      copy: state.lastCompileSucceeded
+        ? 'Prompt assembly ready.'
+        : state.compileError
+          ? 'Compile failed before prompt assembly was completed.'
+          : 'Compile to confirm the final prompt assembly.',
+      tone: state.lastCompileSucceeded ? 'ok' : (state.compileError ? 'danger' : 'neutral'),
+    },
+  ];
+}
+
+function renderCompileInspectAssetRow(asset) {
+  const thumbMarkup = asset.preview
+    ? `<img src="${escapeAttribute(asset.preview)}" alt="${escapeAttribute(asset.assetId)}" loading="lazy" />`
+    : `<div class="inspect-asset-placeholder">${escapeHtml(formatAssetBadge(asset.assetId || asset.role))}</div>`;
+
+  return `
+    <div class="inspect-asset-row">
+      <div class="inspect-asset-thumb">${thumbMarkup}</div>
+      <div class="inspect-asset-copy">
+        <p class="inspect-asset-title">${escapeHtml(asset.assetId || asset.role)}</p>
+        <p class="inspect-asset-meta">${escapeHtml(asset.role)}${asset.note ? ` • ${escapeHtml(asset.note)}` : ''}</p>
+      </div>
+    </div>
+  `;
+}
+
+function renderInspectBadge(label, tone = 'neutral') {
+  return `<span class="inspect-badge is-${escapeAttribute(tone)}">${escapeHtml(label)}</span>`;
+}
+
+function getInspectToneForAction(action) {
+  if (action === 'replace' || action === 'add') {
+    return 'accent';
+  }
+  if (action === 'remove') {
+    return 'danger';
+  }
+  return 'neutral';
 }
 
 function renderVariationStrip() {
@@ -3686,16 +4813,18 @@ function getVisibleStylingStateList() {
 function getStylingPanelConfig(family) {
   if (family === 'eyewear' || family === 'bag') {
     const control = getPrimaryAccessoryElements(family);
-    const action = control.action?.value || 'ignore';
-    const source = control.source?.value || 'system';
-    const placement = control.placement?.value || 'auto';
+    const action = normalizeAccessoryItemUiMode(control.action?.value);
+    const source = accessoryModeUsesReference(action)
+      ? normalizeSourceValue(control.source?.value, Boolean(control.asset?.value))
+      : 'system';
+    const placement = normalizePlacementValue(family, control.placement?.value);
     const assetId = control.asset?.value || '';
     const isActionActive = action === 'add' || action === 'replace';
     return {
       family,
       title: getAccessoryFamilyLabel(family),
       action,
-      actionOptions: ['ignore', 'add', 'replace', 'remove'],
+      actionOptions: getAccessoryItemModes(),
       actionLabel: getAccessoryActionLabel,
       source,
       placement,
@@ -3711,9 +4840,11 @@ function getStylingPanelConfig(family) {
   }
 
   if (family === 'headwear') {
-    const action = elements.headwearMode?.value || 'ignore';
-    const source = elements.headwearSource?.value || 'system';
-    const placement = elements.headwearPlacement?.value || 'auto';
+    const action = normalizeHeadwearUiMode(elements.headwearMode?.value);
+    const source = headwearModeUsesReference(action)
+      ? normalizeSourceValue(elements.headwearSource?.value, Boolean(elements.headwearAssetId?.value))
+      : 'system';
+    const placement = normalizePlacementValue('headwear', elements.headwearPlacement?.value);
     const variant = elements.headwearVariant?.value || '';
     const assetId = elements.headwearAssetId?.value || '';
     const isActionActive = action === 'add' || action === 'replace';
@@ -3721,7 +4852,7 @@ function getStylingPanelConfig(family) {
       family,
       title: 'Headwear',
       action,
-      actionOptions: state.registry?.entities?.headwear?.modes || ['add', 'replace', 'remove', 'ignore'],
+      actionOptions: getHeadwearUiModes(),
       actionLabel: getAccessoryActionLabel,
       source,
       placement,
@@ -3736,26 +4867,29 @@ function getStylingPanelConfig(family) {
     };
   }
 
-  const action = elements.footwearMode?.value || 'ignore';
-  const source = elements.footwearSource?.value || 'system';
+  const action = normalizeFootwearUiMode(elements.footwearMode?.value);
+  const source = footwearModeUsesReference(action)
+    ? normalizeSourceValue(elements.footwearSource?.value, Boolean(elements.footwearAssetId?.value))
+    : 'system';
   const variant = elements.footwearVariant?.value || '';
   const assetId = elements.footwearAssetId?.value || '';
+  const placement = state.job?.entities?.footwear?.placement || 'on_feet';
   const isActionActive = action === 'replace';
   return {
     family: 'footwear',
     title: 'Footwear',
     action,
-    actionOptions: state.registry?.entities?.footwear?.modes || ['preserve', 'replace', 'remove', 'ignore'],
+    actionOptions: getFootwearUiModes(),
     actionLabel: getFootwearActionLabel,
     source,
-    placement: '',
-    placementOptions: ['auto'],
+    placement,
+    placementOptions: getPlacementOptions('footwear'),
     variant,
     variantOptions: state.registry?.entities?.footwear?.variants || [],
     assetId,
     usesReference: isActionActive && source === 'reference',
     isActionActive,
-    summary: buildStylingAccordionSummary(getFootwearActionLabel(action), isActionActive ? source : '', ''),
+    summary: buildStylingAccordionSummary(getFootwearActionLabel(action), footwearModeUsesReference(action) ? source : '', footwearModeUsesReference(action) ? placement : ''),
     note: getFootwearModeHint(action),
   };
 }
@@ -3769,6 +4903,16 @@ function buildStylingAccordionSummary(actionLabel, sourceValue, placementValue) 
     parts.push(getPlacementLabel(placementValue));
   }
   return parts.filter(Boolean).join(' • ');
+}
+
+function getUploadVariantForFamily(family, currentVariant) {
+  if (family === 'eyewear') {
+    return 'sunglasses';
+  }
+  if (family === 'bag') {
+    return 'hand_bag';
+  }
+  return String(currentVariant || '').trim() || family;
 }
 
 function getAssetChoicesForFamily(family) {
@@ -3922,13 +5066,13 @@ function getPrimaryAccessoryElements(family) {
 
 function renderPrimaryAccessoryUi(family) {
   const control = getPrimaryAccessoryElements(family);
-  const mode = control.action?.value || 'ignore';
+  const mode = normalizeAccessoryItemUiMode(control.action?.value);
   const source = control.source?.value || 'system';
   const isActive = mode === 'add' || mode === 'replace';
   const usesReference = isActive && source === 'reference';
   const assetOptions = getAccessoryAssets(family);
 
-  control.card?.classList.toggle('is-passive', mode === 'ignore');
+  control.card?.classList.toggle('is-passive', false);
   control.dependentFields?.classList.toggle('is-hidden', !isActive);
   control.sourceField?.classList.toggle('is-disabled', !isActive);
   control.placementField?.classList.toggle('is-disabled', !isActive);
@@ -3956,11 +5100,17 @@ function renderPrimaryAccessoryUi(family) {
 
 function getPrimaryAccessoryItem(job, family) {
   const items = Array.isArray(job?.entities?.accessory?.items) ? job.entities.accessory.items : [];
-  return items.find((item) => item?.family === family) || {
+  const item = items.find((entry) => entry?.family === family) || {
     family,
     variant: getAccessoryVariants(family)[0] || family,
-    mode: 'ignore',
+    mode: 'preserve',
     asset_id: '',
+  };
+  return {
+    ...item,
+    mode: normalizeAccessoryItemUiMode(item?.mode),
+    source: inferSourceFromItem(item),
+    placement: inferPlacementFromItem(item, family),
   };
 }
 
@@ -3986,9 +5136,12 @@ function buildPrimaryAccessoryItem(family) {
   const control = getPrimaryAccessoryElements(family);
   const variants = getAccessoryVariants(family);
   const assets = getAccessoryAssets(family);
-  const mode = control.action?.value || 'ignore';
-  const source = control.source?.value || 'system';
+  const mode = normalizeAccessoryItemUiMode(control.action?.value);
+  const source = accessoryModeUsesReference(mode)
+    ? normalizeSourceValue(control.source?.value, Boolean(control.asset?.value))
+    : 'system';
   const variant = variants[0] || family;
+  const placement = normalizePlacementValue(family, control.placement?.value);
   const assetId = accessoryModeUsesReference(mode) && source === 'reference'
     ? selectOrValueOrEmpty(control.asset?.value || '', assets)
     : '';
@@ -3997,15 +5150,33 @@ function buildPrimaryAccessoryItem(family) {
     family,
     variant,
     mode,
+    source,
+    placement,
     asset_id: assetId,
   };
 }
 
+function inferSourceFromEntity(entity, modeUsesReference) {
+  if (!modeUsesReference(entity?.mode)) {
+    return 'system';
+  }
+  const fallbackReference = Boolean(entity?.asset_id);
+  return normalizeSourceValue(entity?.source, fallbackReference);
+}
+
 function inferSourceFromItem(item) {
-  return item?.asset_id ? 'reference' : 'system';
+  return inferSourceFromEntity(item, accessoryModeUsesReference);
+}
+
+function inferPlacementFromItem(item, familyOverride = null) {
+  const family = selectOrFirst(familyOverride || item?.family, getAccessoryFamilies());
+  return normalizePlacementValue(family, item?.placement);
 }
 
 function getPlacementOptions(kind) {
+  if (kind === 'footwear') {
+    return ['on_feet'];
+  }
   if (kind === 'eyewear') {
     return ['auto', 'on_eyes', 'on_head', 'in_hand'];
   }
@@ -4022,6 +5193,9 @@ function getPlacementOptions(kind) {
 }
 
 function getPlacementLabel(value) {
+  if (value === 'on_feet') {
+    return 'On feet';
+  }
   if (value === 'on_eyes') {
     return 'On eyes';
   }
@@ -4048,6 +5222,9 @@ function getSourceLabel(value) {
 }
 
 function getAccessoryActionLabel(mode) {
+  if (mode === 'preserve') {
+    return 'Preserve';
+  }
   if (mode === 'add') {
     return 'Add';
   }
@@ -4057,7 +5234,7 @@ function getAccessoryActionLabel(mode) {
   if (mode === 'remove') {
     return 'Remove';
   }
-  return 'None';
+  return 'Legacy Ignore';
 }
 
 function getFootwearActionLabel(mode) {
@@ -4075,16 +5252,19 @@ function getFootwearActionLabel(mode) {
 
 function getAccessoryActionHint(family, mode) {
   const label = getAccessoryFamilyLabel(family);
+  if (mode === 'preserve') {
+    return `${label}: preserve whatever already exists in the original target image, and do not activate uploaded authority.`;
+  }
   if (mode === 'add') {
-    return `${label}: add this item to the result.`;
+    return `${label}: add this item with explicit override authority when using a reference source.`;
   }
   if (mode === 'replace') {
-    return `${label}: swap the current item with a new styling choice.`;
+    return `${label}: replace the current item with explicit override authority when using a reference source.`;
   }
   if (mode === 'remove') {
     return `${label}: remove this item from the result.`;
   }
-  return `${label}: the system will not control this item.`;
+  return `${label}: legacy ignore state retained only for compatibility.`;
 }
 
 function summarizeActionSourcePlacement(actionLabel, sourceLabel, placementLabel) {
@@ -4100,31 +5280,31 @@ function summarizeActionSourcePlacement(actionLabel, sourceLabel, placementLabel
 
 function getPrimaryAccessorySummary(family) {
   const control = getPrimaryAccessoryElements(family);
-  const mode = control.action?.value || 'ignore';
+  const mode = normalizeAccessoryItemUiMode(control.action?.value);
   const isActive = mode === 'add' || mode === 'replace';
   return summarizeActionSourcePlacement(
     getAccessoryActionLabel(mode),
-    isActive ? getSourceLabel(control.source?.value || 'system') : '',
-    isActive ? getPlacementLabel(control.placement?.value || 'auto') : ''
+    isActive ? getSourceLabel(normalizeSourceValue(control.source?.value, Boolean(control.asset?.value))) : '',
+    isActive ? getPlacementLabel(normalizePlacementValue(family, control.placement?.value)) : ''
   );
 }
 
 function getHeadwearSummary() {
-  const mode = elements.headwearMode?.value || 'ignore';
+  const mode = normalizeHeadwearUiMode(elements.headwearMode?.value);
   const isActive = mode === 'add' || mode === 'replace';
   return summarizeActionSourcePlacement(
     getAccessoryActionLabel(mode),
-    isActive ? getSourceLabel(elements.headwearSource?.value || 'system') : '',
-    isActive ? getPlacementLabel(elements.headwearPlacement?.value || 'auto') : ''
+    isActive ? getSourceLabel(normalizeSourceValue(elements.headwearSource?.value, Boolean(elements.headwearAssetId?.value))) : '',
+    isActive ? getPlacementLabel(normalizePlacementValue('headwear', elements.headwearPlacement?.value)) : ''
   );
 }
 
 function getFootwearSummary() {
-  const mode = elements.footwearMode?.value || 'ignore';
+  const mode = normalizeFootwearUiMode(elements.footwearMode?.value);
   return summarizeActionSourcePlacement(
     getFootwearActionLabel(mode),
-    mode === 'replace' ? getSourceLabel(elements.footwearSource?.value || 'system') : '',
-    ''
+    footwearModeUsesReference(mode) ? getSourceLabel(elements.footwearSource?.value || inferSourceFromEntity(state.job?.entities?.footwear, footwearModeUsesReference)) : '',
+    footwearModeUsesReference(mode) ? getPlacementLabel(state.job?.entities?.footwear?.placement || 'on_feet') : ''
   );
 }
 
@@ -4146,27 +5326,46 @@ function getAccessoryFamilyLabel(family) {
 }
 
 function getAccessoryItemModes() {
-  return state.registry?.entities?.accessory?.itemModes || ['add', 'replace', 'remove', 'ignore'];
+  return ['preserve', 'add', 'replace', 'remove'];
 }
 
-function getAccessoryVariants(family) {
-  return state.registry?.entities?.accessory?.variantsByFamily?.[family] || ['default'];
+function getAccessoryVariants(family, registry = null) {
+  const activeRegistry = registry || runtimeState?.registry || null;
+  return activeRegistry?.entities?.accessory?.variantsByFamily?.[family] || ['default'];
 }
 
-function getAccessoryAssets(family) {
-  return state.registry?.entities?.accessory?.assetIdsByFamily?.[family] || [];
+function getAccessoryAssets(family, registry = null) {
+  const activeRegistry = registry || runtimeState?.registry || null;
+  return uniqueStrings([
+    ...(activeRegistry?.entities?.accessory?.assetIdsByFamily?.[family] || []),
+    ...getLibraryAssetIds(family),
+  ]);
 }
 
-function createAccessoryItem() {
-  const availableFamilies = getAccessoryFamilies();
+function createAccessoryItem(registry = null) {
+  const activeRegistry = registry || runtimeState?.registry || null;
+  const availableFamilies = activeRegistry?.entities?.accessory?.families || ['eyewear', 'bag', 'neckwear'];
   const family = availableFamilies.includes('neckwear')
     ? 'neckwear'
     : (availableFamilies.find((item) => item !== 'eyewear' && item !== 'bag') || availableFamilies[0] || 'eyewear');
-  const variants = getAccessoryVariants(family);
+  const variants = getAccessoryVariants(family, registry);
   return {
     family,
     variant: variants[0] || family,
     mode: 'add',
+    source: 'system',
+    placement: 'auto',
+    asset_id: '',
+  };
+}
+
+function createPrimaryAccessoryItem(family, registry = null) {
+  return {
+    family,
+    variant: getAccessoryVariants(family, registry)[0] || family,
+    mode: 'preserve',
+    source: 'system',
+    placement: normalizePlacementValue(family, undefined),
     asset_id: '',
   };
 }
@@ -4186,6 +5385,20 @@ function createInitialUiState() {
     styling: {
       openPanel: 'eyewear',
     },
+    inspect: {
+      open: true,
+      activeTab: 'compile-summary',
+    },
+    modals: {
+      assetUpload: {
+        open: false,
+        family: '',
+        variant: '',
+      },
+      inputSetUpload: {
+        open: false,
+      },
+    },
     results: {
       activeVariationKey: '',
       approvedVariationKey: '',
@@ -4194,22 +5407,29 @@ function createInitialUiState() {
   };
 }
 
-function createWorkflowFriendlyDefaultJob(job) {
+function createWorkflowFriendlyDefaultJob(job, registry = null) {
   const nextJob = mergeDefaultJob(job);
   nextJob.entities.footwear = {
     ...nextJob.entities.footwear,
     mode: 'preserve',
+    source: 'system',
+    placement: 'on_feet',
     asset_id: '',
   };
   nextJob.entities.headwear = {
     ...nextJob.entities.headwear,
-    mode: 'ignore',
+    mode: 'preserve',
+    source: 'system',
+    placement: 'auto',
     asset_id: '',
   };
   nextJob.entities.accessory = {
     ...nextJob.entities.accessory,
     mode: 'apply',
-    items: [],
+    items: [
+      createPrimaryAccessoryItem('eyewear', registry),
+      createPrimaryAccessoryItem('bag', registry),
+    ],
   };
   return nextJob;
 }
@@ -4236,11 +5456,15 @@ function createFallbackJob() {
       },
       footwear: {
         mode: 'replace',
+        source: 'reference',
+        placement: 'on_feet',
         variant: 'sandal',
         asset_id: 'footwear_0001',
       },
       headwear: {
         mode: 'add',
+        source: 'reference',
+        placement: 'on_head',
         variant: 'bandana',
         asset_id: 'headwear_bandana_0001',
       },
@@ -4250,7 +5474,9 @@ function createFallbackJob() {
           {
             family: 'eyewear',
             variant: 'sunglasses',
-            mode: 'ignore',
+            mode: 'preserve',
+            source: 'system',
+            placement: 'auto',
             asset_id: '',
           },
         ],
@@ -4344,13 +5570,13 @@ function createFallbackRegistry() {
         assetIds: ['footwear_0001'],
       },
       headwear: {
-        modes: ['add', 'replace', 'remove', 'ignore'],
+        modes: ['preserve', 'add', 'replace', 'remove', 'ignore'],
         variants: ['bandana', 'headband', 'hat'],
         assetIds: ['headwear_bandana_0001'],
       },
       accessory: {
         modes: ['apply', 'ignore'],
-        itemModes: ['add', 'replace', 'remove', 'ignore'],
+        itemModes: ['preserve', 'add', 'replace', 'remove', 'ignore'],
         families: ['eyewear', 'bag', 'neckwear'],
         variantsByFamily: {
           eyewear: ['sunglasses'],

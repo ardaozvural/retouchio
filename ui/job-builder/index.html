@@ -46,6 +46,11 @@
                       <p id="inputSourceHint" class="field-hint"></p>
                     </label>
 
+                    <div class="action-strip production-flow-secondary-actions">
+                      <button id="createInputSetButton" class="button button-secondary" type="button">Create Input Set</button>
+                      <a class="button button-outline" href="/input-manager">Manage Input Sets</a>
+                    </div>
+
                     <div id="targetInputSummary" class="input-set-summary"></div>
                   </div>
                 </section>
@@ -119,6 +124,12 @@
 
                       <p id="identityHelperText" class="helper-line"></p>
 
+                      <label id="subjectReferencePickerField" class="field">
+                        <span>Subject Reference</span>
+                        <select id="subjectReferencePicker"></select>
+                        <p id="subjectReferencePickerHint" class="field-hint">Select an existing subject reference without leaving Production Flow.</p>
+                      </label>
+
                       <div id="identityReplaceDropzone" class="reference-dropzone" hidden>
                         <input id="identityReferenceInput" type="file" accept="image/*" hidden />
                         <div class="reference-dropzone-copy">
@@ -189,6 +200,38 @@
                 <p class="review-callout">You are about to generate:</p>
                 <p id="reviewSentence" class="review-sentence"></p>
               </div>
+
+              <section id="compileInspectPanel" class="result-inspect-block" aria-labelledby="compileInspectTitle">
+                <button
+                  id="compileInspectToggle"
+                  class="inspect-panel-toggle"
+                  type="button"
+                  aria-expanded="true"
+                  aria-controls="compileInspectBody"
+                >
+                  <div class="inspect-panel-toggle-main">
+                    <div class="inspect-panel-title-group">
+                      <div class="inspect-panel-title-row">
+                        <span class="inspect-panel-eyebrow">Debug / Compile Inspect</span>
+                        <span class="inspect-panel-badge">Debug</span>
+                      </div>
+                      <div class="inspect-panel-copy">
+                        <h3 id="compileInspectTitle">Inspect what the system understood before execution.</h3>
+                        <p>Review authored selections, canonical intent, references, and compile readiness without leaving Production Flow.</p>
+                      </div>
+                    </div>
+                    <div class="inspect-panel-toggle-side">
+                      <div id="compileInspectMeta" class="inspect-panel-meta"></div>
+                      <span class="inspect-panel-caret" aria-hidden="true"></span>
+                    </div>
+                  </div>
+                </button>
+
+                <div id="compileInspectBody" class="inspect-panel-body">
+                  <div id="compileInspectTabs" class="inspect-tab-bar" role="tablist" aria-label="Compile inspect tabs"></div>
+                  <div id="compileInspectContent" class="inspect-panel-content"></div>
+                </div>
+              </section>
 
               <div class="result-strip-block">
                 <div class="result-block-header">
@@ -429,6 +472,76 @@
           </div>
         </div>
       </main>
+    </div>
+
+    <div id="productionAssetModal" class="modal" hidden>
+      <div id="productionAssetModalBackdrop" class="modal-backdrop"></div>
+      <div class="modal-panel production-flow-modal-panel" role="dialog" aria-modal="true" aria-labelledby="productionAssetModalTitle">
+        <div class="modal-header">
+          <div>
+            <h3 id="productionAssetModalTitle">Upload Reference</h3>
+            <p id="productionAssetModalMeta" class="modal-meta">Add a reference without leaving Production Flow.</p>
+          </div>
+          <div class="modal-header-actions">
+            <a class="button button-outline" href="/asset-manager">Manage All References</a>
+            <button id="closeProductionAssetModalButton" class="button button-secondary" type="button">Close</button>
+          </div>
+        </div>
+        <div class="modal-body production-flow-modal-body">
+          <div id="productionAssetModalStatus" class="status-banner" hidden></div>
+          <form id="productionAssetUploadForm" class="upload-form production-flow-modal-form">
+            <label class="field">
+              <span>Reference Family</span>
+              <input id="productionAssetFamilyLabel" type="text" readonly />
+            </label>
+            <label class="field">
+              <span>Style Type</span>
+              <input id="productionAssetVariantLabel" type="text" readonly />
+            </label>
+            <label class="field field-wide">
+              <span>Reference Images</span>
+              <input id="productionAssetFilesInput" type="file" accept=".jpg,.jpeg,.png,.webp" multiple required />
+            </label>
+            <p id="productionAssetFilesHint" class="hint">No files selected.</p>
+            <div class="actions">
+              <button id="productionAssetUploadButton" class="button button-primary" type="submit">Upload and Bind</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <div id="productionInputSetModal" class="modal" hidden>
+      <div id="productionInputSetModalBackdrop" class="modal-backdrop"></div>
+      <div class="modal-panel production-flow-modal-panel" role="dialog" aria-modal="true" aria-labelledby="productionInputSetModalTitle">
+        <div class="modal-header">
+          <div>
+            <h3 id="productionInputSetModalTitle">Create Input Set</h3>
+            <p id="productionInputSetModalMeta" class="modal-meta">Upload target inputs and bind the new set immediately.</p>
+          </div>
+          <div class="modal-header-actions">
+            <a class="button button-outline" href="/input-manager">Manage Input Sets</a>
+            <button id="closeProductionInputSetModalButton" class="button button-secondary" type="button">Close</button>
+          </div>
+        </div>
+        <div class="modal-body production-flow-modal-body">
+          <div id="productionInputSetModalStatus" class="status-banner" hidden></div>
+          <form id="productionInputSetUploadForm" class="upload-form production-flow-modal-form">
+            <label class="field">
+              <span>Set Name</span>
+              <input id="productionInputSetNameInput" type="text" placeholder="example: catalog_drop_april_01" required />
+            </label>
+            <label class="field field-wide">
+              <span>Target Images</span>
+              <input id="productionInputSetFilesInput" type="file" accept=".jpg,.jpeg,.png,.webp" multiple required />
+            </label>
+            <p id="productionInputSetFilesHint" class="hint">No files selected.</p>
+            <div class="actions">
+              <button id="productionInputSetUploadButton" class="button button-primary" type="submit">Create and Select</button>
+            </div>
+          </form>
+        </div>
+      </div>
     </div>
 
     <script src="/job-builder/app.js" defer></script>

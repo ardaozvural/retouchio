@@ -8,6 +8,13 @@ function readJson(filePath) {
   return JSON.parse(fs.readFileSync(filePath, 'utf8'));
 }
 
+function clone(value) {
+  if (value === undefined || value === null) {
+    return value;
+  }
+  return JSON.parse(JSON.stringify(value));
+}
+
 function loadCompilerContext(rootDir) {
   const configDir = path.join(rootDir, 'config');
 
@@ -19,6 +26,150 @@ function loadCompilerContext(rootDir) {
     defaults: {
       outputProfile: 'catalog_4x5_2k',
     },
+  };
+}
+
+function footwearUsesReference(mode) {
+  return mode === 'replace';
+}
+
+function headwearUsesReference(mode) {
+  return mode === 'add' || mode === 'replace';
+}
+
+function accessoryUsesReference(mode) {
+  return mode === 'add' || mode === 'replace';
+}
+
+function usesReferenceAuthority(entity, predicate) {
+  return Boolean(entity && predicate(entity.mode) && entity.source === 'reference' && entity.asset_id);
+}
+
+function stripReferenceAuthority(entity) {
+  if (!entity) {
+    return entity;
+  }
+  return {
+    ...entity,
+    asset_id: null,
+    asset_ids: [],
+  };
+}
+
+function buildCompilerIntentJob(canonicalJob) {
+  const compilerJob = clone(canonicalJob);
+  if (!compilerJob?.entities) {
+    return compilerJob;
+  }
+
+  if (!usesReferenceAuthority(compilerJob.entities.footwear, footwearUsesReference)) {
+    compilerJob.entities.footwear = stripReferenceAuthority(compilerJob.entities.footwear);
+  }
+
+  if (!usesReferenceAuthority(compilerJob.entities.headwear, headwearUsesReference)) {
+    compilerJob.entities.headwear = stripReferenceAuthority(compilerJob.entities.headwear);
+  }
+
+  compilerJob.entities.accessory.items = Array.isArray(compilerJob.entities.accessory?.items)
+    ? compilerJob.entities.accessory.items.map((item) => (
+      usesReferenceAuthority(item, accessoryUsesReference) ? item : stripReferenceAuthority(item)
+    ))
+    : [];
+
+  return compilerJob;
+}
+
+function formatAccessoryLabel(item) {
+  if (item?.family === 'eyewear') {
+    return 'eyewear';
+  }
+  if (item?.family === 'bag') {
+    return 'bag';
+  }
+  if (item?.family === 'neckwear') {
+    return 'neckwear';
+  }
+  return item?.variant || item?.family || 'accessory';
+}
+
+function getPlacementIntentLine(family, placement) {
+  if (family === 'footwear' && placement === 'on_feet') {
+    return 'Keep footwear worn naturally on the feet with clean grounding and believable foot contact.';
+  }
+  if (family === 'headwear' && placement === 'on_head') {
+    return 'Place headwear naturally on the head with believable attachment and stable coverage.';
+  }
+  if (family === 'eyewear' && placement === 'on_eyes') {
+    return 'Wear eyewear naturally on the eyes with believable bridge fit and temple alignment.';
+  }
+  if (family === 'eyewear' && placement === 'on_head') {
+    return 'Rest eyewear naturally on the head without distorting hairline or face shape.';
+  }
+  if (family === 'eyewear' && placement === 'in_hand') {
+    return 'Place eyewear naturally in hand with believable grip, scale, and pose continuity.';
+  }
+  if (family === 'bag' && placement === 'in_hand') {
+    return 'Carry the bag naturally in hand with believable grip, strap tension, and gravity.';
+  }
+  if (family === 'bag' && placement === 'on_forearm') {
+    return 'Carry the bag naturally on the forearm with believable hang, scale, and weight.';
+  }
+  if (family === 'bag' && placement === 'on_shoulder') {
+    return 'Carry the bag naturally on the shoulder with believable strap path, weight, and body contact.';
+  }
+  if (family === 'bag' && placement === 'crossbody') {
+    return 'Wear the bag as a natural crossbody carry with believable strap routing and body contact.';
+  }
+  return '';
+}
+
+function buildIntentBindingSection(canonicalJob) {
+  const lines = [];
+  const footwear = canonicalJob.entities?.footwear || {};
+  const headwear = canonicalJob.entities?.headwear || {};
+  const accessoryItems = Array.isArray(canonicalJob.entities?.accessory?.items) ? canonicalJob.entities.accessory.items : [];
+
+  if (footwear.mode === 'replace') {
+    if (usesReferenceAuthority(footwear, footwearUsesReference)) {
+      lines.push('Use referenced footwear as visual authority for the active footwear result.');
+    }
+    const placementLine = getPlacementIntentLine('footwear', footwear.placement || 'on_feet');
+    if (placementLine) {
+      lines.push(placementLine);
+    }
+  }
+
+  if (headwear.mode === 'add' || headwear.mode === 'replace') {
+    if (usesReferenceAuthority(headwear, headwearUsesReference)) {
+      lines.push('Use referenced headwear as visual authority for the active headwear result.');
+    }
+    const placementLine = getPlacementIntentLine('headwear', headwear.placement || 'auto');
+    if (placementLine) {
+      lines.push(placementLine);
+    }
+  }
+
+  for (const item of accessoryItems) {
+    if (!item || (item.mode !== 'add' && item.mode !== 'replace')) {
+      continue;
+    }
+    if (usesReferenceAuthority(item, accessoryUsesReference)) {
+      lines.push(`Use referenced ${formatAccessoryLabel(item)} as visual authority for that accessory item.`);
+    }
+    const placementLine = getPlacementIntentLine(item.family, item.placement || 'auto');
+    if (placementLine) {
+      lines.push(placementLine);
+    }
+  }
+
+  if (lines.length === 0) {
+    return null;
+  }
+
+  return {
+    id: 'intent_binding',
+    label: 'Intent Binding',
+    lines,
   };
 }
 
@@ -39,16 +190,16 @@ function buildReferenceBindingSection(canonicalJob) {
     lines.push('Garment pattern refs = pattern geometry, scale, and density authority.');
   }
 
-  if (canonicalJob.entities.footwear.mode === 'replace' && canonicalJob.entities.footwear.asset_id) {
+  if (usesReferenceAuthority(canonicalJob.entities.footwear, footwearUsesReference)) {
     lines.push('Footwear refs = locked design authority for footwear only.');
   }
 
-  if ((canonicalJob.entities.headwear.mode === 'add' || canonicalJob.entities.headwear.mode === 'replace') && canonicalJob.entities.headwear.asset_id) {
+  if (usesReferenceAuthority(canonicalJob.entities.headwear, headwearUsesReference)) {
     lines.push('Headwear refs = locked design authority for headwear only.');
   }
 
   const accessoryItems = canonicalJob.entities.accessory.items || [];
-  if (accessoryItems.some((item) => (item.mode === 'add' || item.mode === 'replace') && item.asset_id)) {
+  if (accessoryItems.some((item) => usesReferenceAuthority(item, accessoryUsesReference))) {
     lines.push('Accessory refs = locked design authority for that accessory item only.');
   }
 
@@ -84,25 +235,31 @@ function buildPrompt(jobInput, options = {}) {
   const canonicalJob = normalizeJob(rawJob, {
     defaultOutputProfile: context.defaults.outputProfile,
   });
+  const compilerJob = buildCompilerIntentJob(canonicalJob);
 
   const sections = [];
 
   for (const entityId of order) {
     const entityConfig = entityId === 'core'
       ? { mode: 'apply' }
-      : canonicalJob.entities[entityId];
+      : compilerJob.entities[entityId];
 
     const resolved = resolveEntity(entityId, entityConfig);
     const compiledSections = resolved.module.compile({
       entity: resolved.entity,
-      job: canonicalJob,
+      job: compilerJob,
       context,
     });
 
     sections.push(...compiledSections);
   }
 
-  sections.push(buildReferenceBindingSection(canonicalJob));
+  const intentBindingSection = buildIntentBindingSection(canonicalJob);
+  if (intentBindingSection) {
+    sections.push(intentBindingSection);
+  }
+
+  sections.push(buildReferenceBindingSection(compilerJob));
 
   const prompt = sections
     .map(formatSection)

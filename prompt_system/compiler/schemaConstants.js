@@ -23,14 +23,14 @@ const FROZEN_ENTITY_MODE_MAP = {
   subject: ['preserve', 'ignore'],
   garment: ['preserve', 'restyle', 'ignore'],
   footwear: ['preserve', 'replace', 'remove', 'ignore'],
-  headwear: ['add', 'replace', 'remove', 'ignore'],
+  headwear: ['preserve', 'add', 'replace', 'remove', 'ignore'],
   accessory: ['apply', 'ignore'],
   scene: ['apply', 'preserve', 'ignore'],
   output_profile: ['apply', 'ignore'],
   global_negative_rules: ['apply', 'ignore'],
 };
 
-const FROZEN_ACCESSORY_ITEM_MODES = ['add', 'replace', 'remove', 'ignore'];
+const FROZEN_ACCESSORY_ITEM_MODES = ['preserve', 'add', 'replace', 'remove', 'ignore'];
 
 const FROZEN_STABLE_FIELD_NAMES = [
   'version',
@@ -40,6 +40,8 @@ const FROZEN_STABLE_FIELD_NAMES = [
   'entities',
   'mode',
   'variant',
+  'source',
+  'placement',
   'asset_id',
   'reference_id',
   'profile',

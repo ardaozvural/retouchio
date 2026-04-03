@@ -22,7 +22,7 @@ const GENERIC_VARIANT_LINES = {
 module.exports = {
   id: 'headwear',
   label: 'Headwear',
-  supportedModes: ['add', 'replace', 'remove', 'ignore'],
+  supportedModes: ['preserve', 'add', 'replace', 'remove', 'ignore'],
   variants: ['bandana', 'hat', 'headband'],
   ruleGroups: ['reference_binding', 'coverage_rules', 'placement_rules', 'identity_protection'],
   compile({ entity, context }) {
@@ -31,6 +31,21 @@ module.exports = {
     }
 
     const variantLabel = entity.variant || 'requested headwear';
+
+    if (entity.mode === 'preserve') {
+      return [
+        {
+          id: 'headwear_rules',
+          label: 'Headwear Rules',
+          lines: [
+            'You must preserve the original headwear state from the target image.',
+            'If the target image has no headwear, do not add any headwear.',
+            'Do not use uploaded headwear references as override authority while preservation is active.',
+            'Keep any existing headwear, hairline interaction, and local styling continuity believable and unchanged.',
+          ],
+        },
+      ];
+    }
 
     if (entity.mode === 'remove') {
       return [

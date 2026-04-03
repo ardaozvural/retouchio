@@ -41,7 +41,11 @@ module.exports = {
       const familyLabel = item.family || 'accessory';
       const variantLabel = item.variant || familyLabel;
 
-      if (item.mode === 'add') {
+      if (item.mode === 'preserve') {
+        lines.push(`You must preserve the original ${familyLabel} state from the target image.`);
+        lines.push(`If no ${familyLabel} item exists in the target image, do not add one.`);
+        lines.push(`Do not use uploaded ${familyLabel} references as override authority while preservation is active.`);
+      } else if (item.mode === 'add') {
         lines.push(`You must add a ${variantLabel} accessory in the ${familyLabel} family.`);
       } else if (item.mode === 'replace') {
         lines.push(`You must replace any existing ${familyLabel} item with a ${variantLabel} accessory.`);
@@ -51,7 +55,7 @@ module.exports = {
         lines.push(`Do not replace removed ${familyLabel} with a new ${familyLabel} item.`);
       }
 
-      if (item.mode !== 'remove') {
+      if (item.mode !== 'remove' && item.mode !== 'preserve') {
         if (slotConfig?.referenceBindingText && item.asset_id) {
           lines.push(slotConfig.referenceBindingText);
         }

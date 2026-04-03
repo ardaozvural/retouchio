@@ -52,6 +52,14 @@ const LEGACY_SLOT_MAP = {
   },
 };
 
+const INTENT_SOURCES = ['system', 'reference'];
+const INTENT_PLACEMENTS = {
+  footwear: ['on_feet'],
+  headwear: ['auto', 'on_head'],
+  eyewear: ['auto', 'on_eyes', 'on_head', 'in_hand'],
+  bag: ['auto', 'in_hand', 'on_forearm', 'on_shoulder', 'crossbody'],
+};
+
 function clone(value) {
   if (value === undefined || value === null) {
     return value;
@@ -87,6 +95,8 @@ function createBaseEntities(defaultOutputProfile) {
     footwear: {
       mode: 'ignore',
       variant: null,
+      source: 'system',
+      placement: 'on_feet',
       asset_id: null,
       asset_ids: [],
       slot_key: null,
@@ -94,6 +104,8 @@ function createBaseEntities(defaultOutputProfile) {
     headwear: {
       mode: 'ignore',
       variant: null,
+      source: 'system',
+      placement: 'auto',
       asset_id: null,
       asset_ids: [],
       slot_key: null,
@@ -139,6 +151,98 @@ function normalizeSemanticModes(entities) {
   if (entities.accessory.mode && entities.accessory.mode !== 'apply' && entities.accessory.mode !== 'ignore') {
     entities.accessory.mode = 'apply';
   }
+}
+
+function hasReferenceAsset(entity) {
+  return Boolean(entity?.asset_id) || ensureArray(entity?.asset_ids).some(Boolean);
+}
+
+function normalizeIntentSource(source, fallbackIsReference) {
+  if (INTENT_SOURCES.includes(source)) {
+    return source;
+  }
+  return fallbackIsReference ? 'reference' : 'system';
+}
+
+function getPlacementOptions(family) {
+  return INTENT_PLACEMENTS[family] || ['auto'];
+}
+
+function normalizePlacement(family, placement, fallback) {
+  const allowed = getPlacementOptions(family);
+  return allowed.includes(placement) ? placement : fallback;
+}
+
+function footwearModeUsesReference(mode) {
+  return mode === 'replace';
+}
+
+function headwearModeUsesReference(mode) {
+  return mode === 'add' || mode === 'replace';
+}
+
+function accessoryModeUsesReference(mode) {
+  return mode === 'add' || mode === 'replace';
+}
+
+function hasOwnField(value, fieldName) {
+  return Boolean(value) && Object.prototype.hasOwnProperty.call(value, fieldName);
+}
+
+function normalizeIntentFields(entities, rawEntities = {}) {
+  entities.footwear.asset_ids = ensureArray(entities.footwear.asset_ids);
+  entities.headwear.asset_ids = ensureArray(entities.headwear.asset_ids);
+
+  if (!entities.footwear.asset_id && entities.footwear.asset_ids.length > 0) {
+    entities.footwear.asset_id = entities.footwear.asset_ids[0];
+  }
+  if (!entities.headwear.asset_id && entities.headwear.asset_ids.length > 0) {
+    entities.headwear.asset_id = entities.headwear.asset_ids[0];
+  }
+
+  entities.footwear.source = footwearModeUsesReference(entities.footwear.mode)
+    ? (hasOwnField(rawEntities.footwear, 'source')
+      ? normalizeIntentSource(
+        entities.footwear.source,
+        hasReferenceAsset(entities.footwear)
+      )
+      : normalizeIntentSource(
+        undefined,
+        hasReferenceAsset(entities.footwear)
+      ))
+    : 'system';
+  entities.footwear.placement = normalizePlacement('footwear', entities.footwear.placement, 'on_feet');
+
+  entities.headwear.source = headwearModeUsesReference(entities.headwear.mode)
+    ? (hasOwnField(rawEntities.headwear, 'source')
+      ? normalizeIntentSource(
+        entities.headwear.source,
+        hasReferenceAsset(entities.headwear)
+      )
+      : normalizeIntentSource(
+        undefined,
+        hasReferenceAsset(entities.headwear)
+      ))
+    : 'system';
+  entities.headwear.placement = normalizePlacement('headwear', entities.headwear.placement, 'auto');
+
+  entities.accessory.items = ensureArray(entities.accessory.items).map((item) => {
+    const family = item?.family || 'accessory';
+    const assetIds = ensureArray(item?.asset_ids);
+    const assetId = item?.asset_id || assetIds[0] || null;
+    return {
+      ...item,
+      asset_id: assetId,
+      asset_ids: assetIds,
+      source: accessoryModeUsesReference(item?.mode)
+        ? normalizeIntentSource(
+          item?.source,
+          Boolean(assetId)
+        )
+        : 'system',
+      placement: normalizePlacement(family, item?.placement, 'auto'),
+    };
+  });
 }
 
 function applyLegacySlotMapping(job, entities) {
@@ -280,6 +384,7 @@ function normalizeJob(job, options = {}) {
   }
 
   normalizeSemanticModes(canonicalEntities);
+  normalizeIntentFields(canonicalEntities, clone(job.entities) || {});
 
   canonicalEntities.subject.reference_ids = canonicalEntities.subject.reference_ids?.length
     ? canonicalEntities.subject.reference_ids

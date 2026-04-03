@@ -46,6 +46,6 @@ The order reduces ambiguity and cross-reference leakage.
 - Target image comes first because it anchors garment structure, pose class, and framing.
 - Subject refs come next because identity authority must be established before styling references appear.
 - Garment detail refs come before replace-style accessory refs because garment fidelity is structurally more important than styling.
-- Footwear and headwear refs follow as explicit replacement or add authorities.
+- Footwear and headwear refs follow only when an explicit override mode is active, such as footwear `replace` or headwear `add` / `replace`.
 - Accessory refs come later because they are scoped styling inputs, not global authorities.
 - Final instruction text comes last so the model receives a clean compiled rule set after all image authorities are present.

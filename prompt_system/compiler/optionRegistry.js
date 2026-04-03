@@ -145,11 +145,15 @@ function createDefaultBuilderJob() {
       },
       footwear: {
         mode: 'replace',
+        source: 'reference',
+        placement: 'on_feet',
         variant: 'sandal',
         asset_id: 'footwear_0001',
       },
       headwear: {
         mode: 'add',
+        source: 'reference',
+        placement: 'on_head',
         variant: 'bandana',
         asset_id: 'headwear_bandana_0001',
       },
@@ -159,7 +163,9 @@ function createDefaultBuilderJob() {
           {
             family: 'eyewear',
             variant: 'sunglasses',
-            mode: 'ignore',
+            mode: 'preserve',
+            source: 'system',
+            placement: 'auto',
             asset_id: '',
           },
         ],
