@@ -32,7 +32,7 @@ const state = {
     batchState: null,
     durationMs: null,
     command: '-',
-    logs: 'No run yet.',
+    logs: 'Henüz çalıştırma yok.',
   },
   outputsReview: {
     open: false,
@@ -74,10 +74,10 @@ const state = {
 runtimeState = state;
 
 const COMPILE_INSPECT_TABS = [
-  { id: 'selections', label: 'Selections' },
-  { id: 'canonical-job', label: 'Canonical Job' },
-  { id: 'compile-summary', label: 'Compile Summary' },
-  { id: 'references', label: 'References' },
+  { id: 'selections', label: 'Seçimler' },
+  { id: 'canonical-job', label: 'Kanonik İş' },
+  { id: 'compile-summary', label: 'Derleme Özeti' },
+  { id: 'references', label: 'Referanslar' },
 ];
 
 const elements = {};
@@ -100,6 +100,8 @@ function cacheElements() {
     productBeforeImage: document.getElementById('productBeforeImage'),
     productBeforeEmpty: document.getElementById('productBeforeEmpty'),
     productHelperText: document.getElementById('productHelperText'),
+    productGroupContext: document.getElementById('productGroupContext'),
+    productReferenceSummary: document.getElementById('productReferenceSummary'),
     createInputSetButton: document.getElementById('createInputSetButton'),
     identityModeControl: document.getElementById('identityModeControl'),
     identityModeButtons: Array.from(document.querySelectorAll('[data-identity-mode]')),
@@ -345,7 +347,7 @@ function bindStaticEvents() {
     renderAccessoryItems();
     renderStylingUiState();
     renderAllSidePanels();
-    showStatus('Reset to default example job.');
+    showStatus('Varsayılan örnek işe dönüldü.');
   });
 
   elements.loadSampleButton.addEventListener('click', () => {
@@ -357,7 +359,7 @@ function bindStaticEvents() {
     renderAccessoryItems();
     renderStylingUiState();
     renderAllSidePanels();
-      showStatus('Loaded sample canonical job.');
+      showStatus('Örnek kanonik iş yüklendi.');
   });
 
   elements.saveJobButton.addEventListener('click', () => {
@@ -468,8 +470,8 @@ function bindStaticEvents() {
     const count = Array.from(elements.productionAssetFilesInput.files || []).length;
     if (elements.productionAssetFilesHint) {
       elements.productionAssetFilesHint.textContent = count > 0
-        ? `${count} file${count === 1 ? '' : 's'} selected.`
-        : 'No files selected.';
+        ? `${count} dosya seçildi.`
+        : 'Dosya seçilmedi.';
     }
   });
   elements.productionAssetUploadForm?.addEventListener('submit', async (event) => {
@@ -483,8 +485,8 @@ function bindStaticEvents() {
     const count = Array.from(elements.productionInputSetFilesInput.files || []).length;
     if (elements.productionInputSetFilesHint) {
       elements.productionInputSetFilesHint.textContent = count > 0
-        ? `${count} file${count === 1 ? '' : 's'} selected.`
-        : 'No files selected.';
+        ? `${count} dosya seçildi.`
+        : 'Dosya seçilmedi.';
     }
   });
   elements.productionInputSetUploadForm?.addEventListener('submit', async (event) => {
@@ -516,21 +518,21 @@ function bindStaticEvents() {
   });
 
   elements.copyJsonButton.addEventListener('click', async () => {
-    await copyText(JSON.stringify(getJsonExportPayload(), null, 2), 'Canonical JSON copied.');
+    await copyText(JSON.stringify(getJsonExportPayload(), null, 2), 'Kanonik JSON kopyalandı.');
   });
 
   elements.downloadJsonButton.addEventListener('click', () => {
     const fileName = `${(state.job.jobId || 'retouchio-job').trim() || 'retouchio-job'}.canonical.json`;
     downloadText(fileName, JSON.stringify(getJsonExportPayload(), null, 2), 'application/json');
-    showStatus('Canonical JSON downloaded.');
+    showStatus('Kanonik JSON indirildi.');
   });
 
   elements.copyPromptButton.addEventListener('click', async () => {
     if (!state.compiledPrompt) {
-      showStatus('Compile prompt first.', true);
+      showStatus('Önce derleme yapın.', true);
       return;
     }
-    await copyText(state.compiledPrompt, 'Compiled prompt copied.');
+    await copyText(state.compiledPrompt, 'Derlenmiş istem kopyalandı.');
   });
 
   elements.addAccessoryButton.addEventListener('click', () => {
@@ -675,31 +677,31 @@ function bindVisibleShellEvents() {
   elements.approveOutputButton?.addEventListener('click', () => {
     const active = getActiveVariation();
     if (!active) {
-      showStatus('Select a variation first.', true);
+      showStatus('Önce bir varyasyon seçin.', true);
       return;
     }
     state.ui.results.approvedVariationKey = active.key;
     renderConnectedResultSystem();
-    showStatus(`${active.title} marked as approved in the UI shell.`);
+    showStatus(`${active.title} arayüzde onaylandı.`);
   });
 
   elements.regenerateOutputButton?.addEventListener('click', () => {
     const candidates = buildVariationCandidates();
     if (candidates.length === 0) {
-      showStatus('No variation candidates available yet.', true);
+      showStatus('Henüz kullanılabilir varyasyon yok.', true);
       return;
     }
     const currentIndex = candidates.findIndex((item) => item.key === state.ui.results.activeVariationKey);
     const nextIndex = currentIndex >= 0 ? (currentIndex + 1) % candidates.length : 0;
     state.ui.results.activeVariationKey = candidates[nextIndex].key;
     renderConnectedResultSystem();
-    showStatus(`Showing ${candidates[nextIndex].title}.`);
+    showStatus(`${candidates[nextIndex].title} gösteriliyor.`);
   });
 
   elements.downloadOutputButton?.addEventListener('click', () => {
     const active = getActiveVariation();
     if (!active?.outputUrl) {
-      showStatus('No output preview available to download.', true);
+      showStatus('İndirilecek çıktı önizlemesi yok.', true);
       return;
     }
     const link = document.createElement('a');
@@ -733,7 +735,8 @@ function handleVisiblePillGroupClick(event) {
 function handleStylingAccordionClick(event) {
   const toggle = event.target.closest('[data-styling-toggle]');
   if (toggle) {
-    state.ui.styling.openPanel = String(toggle.dataset.stylingToggle || 'eyewear');
+    const family = String(toggle.dataset.stylingToggle || '').trim();
+    state.ui.styling.openPanel = state.ui.styling.openPanel === family ? '' : family;
     renderStylingAccordion();
     return;
   }
@@ -781,10 +784,10 @@ function openAssetUploadModal(family) {
   };
 
   if (elements.productionAssetModalTitle) {
-    elements.productionAssetModalTitle.textContent = `Upload ${config.title} Reference`;
+    elements.productionAssetModalTitle.textContent = `${config.title} Referansı Yükle`;
   }
   if (elements.productionAssetModalMeta) {
-    elements.productionAssetModalMeta.textContent = `Add a ${config.title.toLowerCase()} reference and bind it directly to this styling card.`;
+    elements.productionAssetModalMeta.textContent = `${config.title.toLowerCase()} referansını ekleyin ve doğrudan bu kartla eşleyin.`;
   }
   if (elements.productionAssetFamilyLabel) {
     elements.productionAssetFamilyLabel.value = config.title;
@@ -796,7 +799,7 @@ function openAssetUploadModal(family) {
     elements.productionAssetUploadForm.reset();
   }
   if (elements.productionAssetFilesHint) {
-    elements.productionAssetFilesHint.textContent = 'No files selected.';
+    elements.productionAssetFilesHint.textContent = 'Dosya seçilmedi.';
   }
   setInlineModalStatus(elements.productionAssetModalStatus, '', false);
   updateProductionModalBusyStates();
@@ -819,7 +822,7 @@ function closeAssetUploadModal(force = false) {
     elements.productionAssetUploadForm.reset();
   }
   if (elements.productionAssetFilesHint) {
-    elements.productionAssetFilesHint.textContent = 'No files selected.';
+    elements.productionAssetFilesHint.textContent = 'Dosya seçilmedi.';
   }
   setInlineModalStatus(elements.productionAssetModalStatus, '', false);
   if (elements.productionAssetModal) {
@@ -837,11 +840,11 @@ async function uploadAssetFromProductionFlow() {
   const variant = String(state.ui.modals?.assetUpload?.variant || '').trim();
   const files = Array.from(elements.productionAssetFilesInput?.files || []);
   if (!family || !variant) {
-    setInlineModalStatus(elements.productionAssetModalStatus, 'Choose a styling family first.', true);
+    setInlineModalStatus(elements.productionAssetModalStatus, 'Önce bir stil ailesi seçin.', true);
     return;
   }
   if (files.length === 0) {
-    setInlineModalStatus(elements.productionAssetModalStatus, 'Select at least one reference image.', true);
+    setInlineModalStatus(elements.productionAssetModalStatus, 'En az bir referans görseli seçin.', true);
     return;
   }
 
@@ -861,20 +864,20 @@ async function uploadAssetFromProductionFlow() {
     });
     const payload = await response.json();
     if (!response.ok) {
-      throw new Error(payload.error || 'Reference upload failed.');
+      throw new Error(payload.error || 'Referans yüklenemedi.');
     }
 
     await refreshProductionAssetLibrary();
     applyVisibleStylingSelection(family, 'asset', payload.asset_id);
     setInlineModalStatus(
       elements.productionAssetModalStatus,
-      `${payload.asset_id} uploaded and bound to ${getStylingPanelConfig(family).title}.`,
+      `${payload.asset_id} yüklendi ve ${getStylingPanelConfig(family).title} alanına bağlandı.`,
       false
     );
     closeAssetUploadModal(true);
-    showStatus(`Reference uploaded and bound: ${payload.asset_id}.`);
+    showStatus(`Referans yüklendi ve bağlandı: ${payload.asset_id}.`);
   } catch (error) {
-    setInlineModalStatus(elements.productionAssetModalStatus, error.message || 'Reference upload failed.', true);
+    setInlineModalStatus(elements.productionAssetModalStatus, error.message || 'Referans yüklenemedi.', true);
   } finally {
     state.busy.inlineAssetUpload = false;
     updateProductionModalBusyStates();
@@ -889,7 +892,7 @@ function openInputSetUploadModal() {
     elements.productionInputSetUploadForm.reset();
   }
   if (elements.productionInputSetFilesHint) {
-    elements.productionInputSetFilesHint.textContent = 'No files selected.';
+    elements.productionInputSetFilesHint.textContent = 'Dosya seçilmedi.';
   }
   setInlineModalStatus(elements.productionInputSetModalStatus, '', false);
   updateProductionModalBusyStates();
@@ -910,7 +913,7 @@ function closeInputSetUploadModal(force = false) {
     elements.productionInputSetUploadForm.reset();
   }
   if (elements.productionInputSetFilesHint) {
-    elements.productionInputSetFilesHint.textContent = 'No files selected.';
+    elements.productionInputSetFilesHint.textContent = 'Dosya seçilmedi.';
   }
   setInlineModalStatus(elements.productionInputSetModalStatus, '', false);
   if (elements.productionInputSetModal) {
@@ -927,11 +930,11 @@ async function uploadInputSetFromProductionFlow() {
   const name = String(elements.productionInputSetNameInput?.value || '').trim();
   const files = Array.from(elements.productionInputSetFilesInput?.files || []);
   if (!name) {
-    setInlineModalStatus(elements.productionInputSetModalStatus, 'Input set name is required.', true);
+    setInlineModalStatus(elements.productionInputSetModalStatus, 'Girdi kümesi adı zorunludur.', true);
     return;
   }
   if (files.length === 0) {
-    setInlineModalStatus(elements.productionInputSetModalStatus, 'Select at least one target image.', true);
+    setInlineModalStatus(elements.productionInputSetModalStatus, 'En az bir hedef görsel seçin.', true);
     return;
   }
 
@@ -950,7 +953,7 @@ async function uploadInputSetFromProductionFlow() {
     });
     const payload = await response.json();
     if (!response.ok) {
-      throw new Error(payload.error || 'Input set upload failed.');
+      throw new Error(payload.error || 'Girdi kümesi yüklenemedi.');
     }
 
     await refreshManagedInputSets();
@@ -958,9 +961,9 @@ async function uploadInputSetFromProductionFlow() {
     elements.inputSource.value = selectOrFirst(payload.path, getInputSourceOptions(payload.path), 'batch_input');
     syncStateFromForm();
     closeInputSetUploadModal(true);
-    showStatus(`Input set created and selected: ${payload.name || payload.inputSetId}.`);
+    showStatus(`Girdi kümesi oluşturuldu ve seçildi: ${payload.name || payload.inputSetId}.`);
   } catch (error) {
-    setInlineModalStatus(elements.productionInputSetModalStatus, error.message || 'Input set upload failed.', true);
+    setInlineModalStatus(elements.productionInputSetModalStatus, error.message || 'Girdi kümesi yüklenemedi.', true);
   } finally {
     state.busy.inlineInputUpload = false;
     updateProductionModalBusyStates();
@@ -970,7 +973,7 @@ async function uploadInputSetFromProductionFlow() {
 function updateProductionModalBusyStates() {
   if (elements.productionAssetUploadButton) {
     elements.productionAssetUploadButton.disabled = state.busy.inlineAssetUpload;
-    elements.productionAssetUploadButton.textContent = state.busy.inlineAssetUpload ? 'Uploading...' : 'Upload and Bind';
+    elements.productionAssetUploadButton.textContent = state.busy.inlineAssetUpload ? 'Yükleniyor...' : 'Yükle ve Bağla';
   }
   if (elements.closeProductionAssetModalButton) {
     elements.closeProductionAssetModalButton.disabled = state.busy.inlineAssetUpload;
@@ -980,7 +983,7 @@ function updateProductionModalBusyStates() {
   }
   if (elements.productionInputSetUploadButton) {
     elements.productionInputSetUploadButton.disabled = state.busy.inlineInputUpload;
-    elements.productionInputSetUploadButton.textContent = state.busy.inlineInputUpload ? 'Creating...' : 'Create and Select';
+    elements.productionInputSetUploadButton.textContent = state.busy.inlineInputUpload ? 'Oluşturuluyor...' : 'Oluştur ve Seç';
   }
   if (elements.closeProductionInputSetModalButton) {
     elements.closeProductionInputSetModalButton.disabled = state.busy.inlineInputUpload;
@@ -1006,7 +1009,7 @@ async function refreshProductionAssetLibrary() {
   const response = await fetch('/api/assets/list');
   const payload = await response.json();
   if (!response.ok) {
-    throw new Error(payload.error || 'Failed to refresh reference library.');
+    throw new Error(payload.error || 'Referans kütüphanesi yenilenemedi.');
   }
   state.assetLibrary = {
     assetsByFamily: payload.assetsByFamily || {},
@@ -1019,7 +1022,7 @@ async function refreshManagedInputSets() {
   const response = await fetch('/api/inputs/list');
   const payload = await response.json();
   if (!response.ok) {
-    throw new Error(payload.error || 'Failed to refresh input sets.');
+    throw new Error(payload.error || 'Girdi kümeleri yenilenemedi.');
   }
   state.managedInputSets = Array.isArray(payload.inputSets) ? payload.inputSets : [];
   const currentInputSource = String(elements.inputSource?.value || state.job?.inputSource || '').trim();
@@ -1044,7 +1047,7 @@ function setIdentityReferencePreview(file) {
   if (state.ui.model.identityPreviewUrl) {
     URL.revokeObjectURL(state.ui.model.identityPreviewUrl);
   }
-  state.ui.model.identityReferenceName = file.name || 'reference_face';
+  state.ui.model.identityReferenceName = file.name || 'konu_referansi';
   state.ui.model.identityPreviewUrl = URL.createObjectURL(file);
   renderVisibleModelShell();
   renderConnectedResultSystem();
@@ -1146,7 +1149,7 @@ async function loadBootstrap() {
   try {
     const response = await fetch('/api/job-builder/bootstrap');
     if (!response.ok) {
-      throw new Error('Failed to load bootstrap data');
+      throw new Error('Başlangıç verileri yüklenemedi');
     }
 
     const payload = await response.json();
@@ -1175,7 +1178,7 @@ async function loadBootstrap() {
       const hasError = bindingResults.some((item) => item.isError);
       showStatus(bindingResults.map((item) => item.message).join(' | '), hasError);
     } else {
-      showStatus('Production flow ready.');
+      showStatus('Üretim Akışı hazır.');
     }
   } catch (error) {
     state.assetLibrary = {
@@ -1204,7 +1207,7 @@ async function loadBootstrap() {
       const hasError = bindingResults.some((item) => item.isError);
       showStatus(bindingResults.map((item) => item.message).join(' | '), hasError);
     } else {
-      showStatus(`Bootstrap fallback active: ${error.message}`, true);
+      showStatus(`Başlangıç yedeği devrede: ${error.message}`, true);
     }
   }
 }
@@ -1245,12 +1248,12 @@ async function refreshBatchJobs() {
     const response = await fetch('/api/batch/list');
     const payload = await response.json();
     if (!response.ok) {
-      throw new Error(payload.error || 'Failed to load batch jobs.');
+      throw new Error(payload.error || 'Toplu işler yüklenemedi.');
     }
     state.batchJobs = Array.isArray(payload.batches) ? payload.batches : [];
     renderBatchJobs();
   } catch (error) {
-    showStatus(error.message || 'Failed to load batch jobs.', true);
+    showStatus(error.message || 'Toplu işler yüklenemedi.', true);
   } finally {
     setActionBusy('refreshBatches', false);
   }
@@ -1266,13 +1269,13 @@ async function refreshAllBatchStatuses() {
     });
     const payload = await response.json();
     if (!response.ok) {
-      throw new Error(payload.error || 'Batch refresh failed.');
+      throw new Error(payload.error || 'Toplu iş yenileme başarısız oldu.');
     }
     state.batchJobs = Array.isArray(payload.batches) ? payload.batches : [];
     renderBatchJobs();
-    showStatus(payload.success ? 'Batch statuses refreshed.' : 'Batch statuses refreshed with errors.', !payload.success);
+    showStatus(payload.success ? 'Toplu iş durumları yenilendi.' : 'Toplu iş durumları uyarılarla yenilendi.', !payload.success);
   } catch (error) {
-    showStatus(error.message || 'Batch refresh failed.', true);
+    showStatus(error.message || 'Toplu iş yenileme başarısız oldu.', true);
   } finally {
     setActionBusy('batchAction', false);
   }
@@ -1287,13 +1290,13 @@ async function refreshSingleBatchStatus(batchName) {
     const response = await fetch(`/api/batch/status?batchName=${encodeURIComponent(batchName)}`);
     const payload = await response.json();
     if (!response.ok) {
-      throw new Error(payload.error || 'Batch status refresh failed.');
+      throw new Error(payload.error || 'Toplu iş durumu yenilenemedi.');
     }
     upsertBatchState(payload.batch);
     renderBatchJobs();
-    showStatus(`Batch status refreshed: ${batchName}`);
+    showStatus(`Toplu iş durumu yenilendi: ${batchName}`);
   } catch (error) {
-    showStatus(error.message || 'Batch status refresh failed.', true);
+    showStatus(error.message || 'Toplu iş durumu yenilenemedi.', true);
   } finally {
     setActionBusy('batchAction', false);
   }
@@ -1303,7 +1306,7 @@ async function cancelBatch(batchName) {
   if (!batchName) {
     return;
   }
-  const approved = window.confirm(`Cancel batch "${batchName}"?`);
+  const approved = window.confirm(`"${batchName}" adlı toplu iş iptal edilsin mi?`);
   if (!approved) {
     return;
   }
@@ -1317,13 +1320,13 @@ async function cancelBatch(batchName) {
     });
     const payload = await response.json();
     if (!response.ok) {
-      throw new Error(payload.error || 'Batch cancel failed.');
+      throw new Error(payload.error || 'Toplu iş iptal edilemedi.');
     }
     upsertBatchState(payload.batch);
     renderBatchJobs();
-    showStatus(`Batch cancel request sent: ${batchName}`);
+    showStatus(`Toplu iş iptal isteği gönderildi: ${batchName}`);
   } catch (error) {
-    showStatus(error.message || 'Batch cancel failed.', true);
+    showStatus(error.message || 'Toplu iş iptal edilemedi.', true);
   } finally {
     setActionBusy('batchAction', false);
   }
@@ -1342,14 +1345,14 @@ async function downloadBatch(batchName) {
     });
     const payload = await response.json();
     if (!response.ok) {
-      throw new Error(payload.error || 'Batch download failed.');
+      throw new Error(payload.error || 'Toplu iş indirilemedi.');
     }
     upsertBatchState(payload.batch);
     renderBatchJobs();
     const saved = payload.download?.savedCount ?? 0;
-    showStatus(`Batch downloaded: ${batchName} (${saved} image${saved === 1 ? '' : 's'})`);
+    showStatus(`Toplu iş indirildi: ${batchName} (${saved} görsel)`);
   } catch (error) {
-    showStatus(error.message || 'Batch download failed.', true);
+    showStatus(error.message || 'Toplu iş indirilemedi.', true);
   } finally {
     setActionBusy('batchAction', false);
   }
@@ -1377,7 +1380,7 @@ async function viewBatchOutputs(batchName) {
     const response = await fetch(`/api/batch/outputs?batchName=${encodeURIComponent(batchName)}`);
     const payload = await response.json();
     if (!response.ok) {
-      throw new Error(payload.error || 'Failed to load batch outputs.');
+      throw new Error(payload.error || 'Toplu iş çıktıları yüklenemedi.');
     }
 
     state.outputsReview.batchName = payload.batchName || batchName;
@@ -1389,7 +1392,7 @@ async function viewBatchOutputs(batchName) {
     renderOutputsModal();
   } catch (error) {
     state.outputsReview.loading = false;
-    state.outputsReview.error = error.message || 'Failed to load batch outputs.';
+    state.outputsReview.error = error.message || 'Toplu iş çıktıları yüklenemedi.';
     renderOutputsModal();
   }
 }
@@ -1401,7 +1404,7 @@ function renderOutputsModal() {
   if (!state.outputsReview.open) {
     elements.outputsModal.hidden = true;
     elements.outputsModal.setAttribute('aria-hidden', 'true');
-    elements.outputsModalTitle.textContent = 'Batch Outputs';
+    elements.outputsModalTitle.textContent = 'Toplu İş Çıktıları';
     elements.outputsModalMeta.textContent = '-';
     elements.outputsModalBody.innerHTML = '';
     renderOutputsModeToggle();
@@ -1410,7 +1413,7 @@ function renderOutputsModal() {
 
   elements.outputsModal.hidden = false;
   elements.outputsModal.setAttribute('aria-hidden', 'false');
-  elements.outputsModalTitle.textContent = 'Batch Outputs';
+  elements.outputsModalTitle.textContent = 'Toplu İş Çıktıları';
   const metaParts = [state.outputsReview.batchName || '-'];
   if (state.outputsReview.outputDir) {
     metaParts.push(state.outputsReview.outputDir);
@@ -1419,7 +1422,7 @@ function renderOutputsModal() {
   renderOutputsModeToggle();
 
   if (state.outputsReview.loading) {
-    elements.outputsModalBody.innerHTML = '<div class="output-empty">Loading outputs...</div>';
+    elements.outputsModalBody.innerHTML = '<div class="output-empty">Çıktılar yükleniyor...</div>';
     return;
   }
 
@@ -1429,7 +1432,7 @@ function renderOutputsModal() {
   }
 
   if (!Array.isArray(state.outputsReview.items) || state.outputsReview.items.length === 0) {
-    elements.outputsModalBody.innerHTML = '<div class="output-empty">No outputs found for this batch yet.</div>';
+    elements.outputsModalBody.innerHTML = '<div class="output-empty">Bu toplu iş için henüz çıktı bulunamadı.</div>';
     return;
   }
 
@@ -1440,7 +1443,7 @@ function renderOutputsModal() {
       .map((item, index) => ({ item, index }))
       .filter(({ item }) => Boolean(item?.output?.url));
     if (outputItems.length === 0) {
-      elements.outputsModalBody.innerHTML = '<div class="output-empty">No outputs found for this batch yet.</div>';
+      elements.outputsModalBody.innerHTML = '<div class="output-empty">Bu toplu iş için henüz çıktı bulunamadı.</div>';
       return;
     }
 
@@ -1456,12 +1459,12 @@ function renderOutputsModal() {
             >
               <img
                 src="${escapeAttribute(item.output.url)}"
-                alt="${escapeAttribute(item.output.file || item.key || 'output image')}"
+                alt="${escapeAttribute(item.output.file || item.key || 'çıktı görseli')}"
                 loading="lazy"
               />
             </button>
             <p class="output-thumb-name" title="${escapeAttribute(item.output.file || item.key || '')}">
-              ${escapeHtml(item.output.file || item.key || 'Unnamed output')}
+              ${escapeHtml(item.output.file || item.key || 'Adsız çıktı')}
             </p>
           </article>
         `).join('')}
@@ -1490,17 +1493,17 @@ function renderOutputsModal() {
           >
             <div class="output-thumb-pair-grid">
               <div class="output-thumb-slot">
-                <span class="output-thumb-label">Input</span>
-                ${renderThumb(item.input, 'No input found')}
+                <span class="output-thumb-label">Girdi</span>
+                ${renderThumb(item.input, 'Girdi bulunamadı')}
               </div>
               <div class="output-thumb-slot">
-                <span class="output-thumb-label">Output</span>
-                ${renderThumb(item.output, 'No output')}
+                <span class="output-thumb-label">Çıktı</span>
+                ${renderThumb(item.output, 'Çıktı yok')}
               </div>
             </div>
           </button>
           <p class="output-thumb-name" title="${escapeAttribute(item.key || '')}">
-            ${escapeHtml(item.key || 'No key')}
+            ${escapeHtml(item.key || 'Anahtar yok')}
           </p>
         </article>
       `).join('')}
@@ -1585,41 +1588,41 @@ function openOutputImageModal(item, previewMode = 'compare') {
   elements.outputsLargeOutputPane.classList.toggle('output-compare-pane-full', mode === 'output');
 
   if (mode === 'output') {
-    elements.outputsImageModalTitle.textContent = 'Output Preview';
+    elements.outputsImageModalTitle.textContent = 'Çıktı Önizlemesi';
     elements.outputsImageModalMeta.textContent = output?.file || key;
     elements.outputsLargeInputImage.hidden = true;
     elements.outputsLargeInputImage.src = '';
-    elements.outputsLargeInputImage.alt = 'Batch input preview';
+    elements.outputsLargeInputImage.alt = 'Toplu iş girdi önizlemesi';
     elements.outputsLargeInputEmpty.hidden = true;
-    elements.outputsLargeInputEmpty.textContent = 'No input found';
+    elements.outputsLargeInputEmpty.textContent = 'Girdi bulunamadı';
   } else {
-    elements.outputsImageModalTitle.textContent = 'Input / Output Compare';
+    elements.outputsImageModalTitle.textContent = 'Girdi / Çıktı Karşılaştırması';
     elements.outputsImageModalMeta.textContent = key;
     if (input?.url) {
       elements.outputsLargeInputImage.hidden = false;
       elements.outputsLargeInputImage.src = input.url;
-      elements.outputsLargeInputImage.alt = input.file || 'batch input image';
+      elements.outputsLargeInputImage.alt = input.file || 'toplu iş girdi görseli';
       elements.outputsLargeInputEmpty.hidden = true;
     } else {
       elements.outputsLargeInputImage.hidden = true;
       elements.outputsLargeInputImage.src = '';
-      elements.outputsLargeInputImage.alt = 'Batch input preview';
+      elements.outputsLargeInputImage.alt = 'Toplu iş girdi önizlemesi';
       elements.outputsLargeInputEmpty.hidden = false;
-      elements.outputsLargeInputEmpty.textContent = 'No input found';
+      elements.outputsLargeInputEmpty.textContent = 'Girdi bulunamadı';
     }
   }
 
   if (output?.url) {
     elements.outputsLargeOutputImage.hidden = false;
     elements.outputsLargeOutputImage.src = output.url;
-    elements.outputsLargeOutputImage.alt = output.file || 'batch output image';
+    elements.outputsLargeOutputImage.alt = output.file || 'toplu iş çıktı görseli';
     elements.outputsLargeOutputEmpty.hidden = true;
   } else {
     elements.outputsLargeOutputImage.hidden = true;
     elements.outputsLargeOutputImage.src = '';
-    elements.outputsLargeOutputImage.alt = 'Batch output preview';
+    elements.outputsLargeOutputImage.alt = 'Toplu iş çıktı önizlemesi';
     elements.outputsLargeOutputEmpty.hidden = false;
-    elements.outputsLargeOutputEmpty.textContent = 'No output';
+    elements.outputsLargeOutputEmpty.textContent = 'Çıktı yok';
   }
 }
 
@@ -1642,14 +1645,14 @@ function closeOutputImageModal() {
   elements.outputsLargeOutputPane.classList.remove('output-compare-pane-full');
   elements.outputsLargeInputImage.hidden = true;
   elements.outputsLargeInputImage.src = '';
-  elements.outputsLargeInputImage.alt = 'Batch input preview';
+  elements.outputsLargeInputImage.alt = 'Toplu iş girdi önizlemesi';
   elements.outputsLargeInputEmpty.hidden = true;
-  elements.outputsLargeInputEmpty.textContent = 'No input found';
+  elements.outputsLargeInputEmpty.textContent = 'Girdi bulunamadı';
   elements.outputsLargeOutputImage.hidden = true;
   elements.outputsLargeOutputImage.src = '';
-  elements.outputsLargeOutputImage.alt = 'Batch output preview';
+  elements.outputsLargeOutputImage.alt = 'Toplu iş çıktı önizlemesi';
   elements.outputsLargeOutputEmpty.hidden = true;
-  elements.outputsLargeOutputEmpty.textContent = 'No output';
+  elements.outputsLargeOutputEmpty.textContent = 'Çıktı yok';
 }
 
 function populateSystemSignals() {
@@ -1689,8 +1692,8 @@ function populateStaticOptions() {
   populateSelect(elements.outputProfileProfile, entities.output_profile?.profiles || ['catalog_4x5_2k']);
   populateSelect(elements.globalNegativeMode, entities.global_negative_rules?.modes || ['apply', 'ignore']);
 
-  populateSelectWithEmptyState(elements.subjectReferenceId, entities.subject?.referenceIds || [], 'No subject refs found');
-  populateSelectWithEmptyState(elements.subjectReferencePicker, entities.subject?.referenceIds || [], 'No subject refs found');
+  populateSelectWithEmptyState(elements.subjectReferenceId, entities.subject?.referenceIds || [], 'Konu referansı bulunamadı');
+  populateSelectWithEmptyState(elements.subjectReferencePicker, entities.subject?.referenceIds || [], 'Konu referansı bulunamadı');
   populateLabeledSelect(elements.eyewearSource, ['reference', 'system'], getSourceLabel);
   populateLabeledSelect(elements.eyewearPlacement, getPlacementOptions('eyewear'), getPlacementLabel);
   populateLabeledSelect(elements.bagSource, ['reference', 'system'], getSourceLabel);
@@ -1703,10 +1706,10 @@ function refreshAssetSelectOptions() {
   const currentBag = elements.bagAssetId?.value || '';
   const currentFootwear = elements.footwearAssetId?.value || '';
   const currentHeadwear = elements.headwearAssetId?.value || '';
-  elements.eyewearAssetId.innerHTML = renderAssetOptionList(getAccessoryAssets('eyewear'), currentEyewear, 'No compatible references found');
-  elements.bagAssetId.innerHTML = renderAssetOptionList(getAccessoryAssets('bag'), currentBag, 'No compatible references found');
-  elements.footwearAssetId.innerHTML = renderAssetOptionList(getFootwearAssets(), currentFootwear, 'No compatible references found');
-  elements.headwearAssetId.innerHTML = renderAssetOptionList(getHeadwearAssets(), currentHeadwear, 'No compatible references found');
+  elements.eyewearAssetId.innerHTML = renderAssetOptionList(getAccessoryAssets('eyewear'), currentEyewear, 'Uygun referans bulunamadı');
+  elements.bagAssetId.innerHTML = renderAssetOptionList(getAccessoryAssets('bag'), currentBag, 'Uygun referans bulunamadı');
+  elements.footwearAssetId.innerHTML = renderAssetOptionList(getFootwearAssets(), currentFootwear, 'Uygun referans bulunamadı');
+  elements.headwearAssetId.innerHTML = renderAssetOptionList(getHeadwearAssets(), currentHeadwear, 'Uygun referans bulunamadı');
 }
 
 function hydrateForm() {
@@ -1869,7 +1872,7 @@ function syncStateFromForm() {
 function renderAccessoryItems() {
   const items = getAdditionalAccessoryItems(state.job.entities.accessory.items || []);
   if (items.length === 0) {
-    elements.accessoryItems.innerHTML = '<div class="empty-state">No extra styling rows. Add one only when you need neckwear or another accessory beyond the main cards.</div>';
+    elements.accessoryItems.innerHTML = '<div class="empty-state">Ek stil satırı yok. Ana kartlar yetmediğinde boyun aksesuarı ya da başka bir aksesuar ekleyin.</div>';
     return;
   }
 
@@ -1897,19 +1900,19 @@ function renderAccessoryItem(item, index) {
       <div class="accessory-item-header">
         <div>
           <p class="accessory-item-title">${escapeHtml(getAccessoryFamilyLabel(family))}</p>
-          <p class="accessory-item-subtitle">Use this extra row when the main styling cards are not enough.</p>
+          <p class="accessory-item-subtitle">Ana stil kartları yetmediğinde bu ek satırı kullanın.</p>
         </div>
-        <button class="button" type="button" data-action="remove-accessory" data-index="${index}">Remove</button>
+        <button class="button" type="button" data-action="remove-accessory" data-index="${index}">Kaldır</button>
       </div>
       <div class="field-grid accessory-row-grid">
         <label class="field">
-          <span>item</span>
+          <span>Öğe</span>
           <select data-accessory-field="family" data-index="${index}">
             ${renderLabeledOptionList(getAccessoryFamilies(), family, getAccessoryFamilyLabel)}
           </select>
         </label>
         <label class="field field-primary">
-          <span>action</span>
+          <span>Eylem</span>
           <select data-accessory-field="mode" data-index="${index}">
             ${renderLabeledOptionList(modes, mode, getAccessoryActionLabel)}
           </select>
@@ -1919,35 +1922,35 @@ function renderAccessoryItem(item, index) {
       <div class="styling-dependent-fields${accessoryModeUsesReference(mode) ? '' : ' is-hidden'}">
         <div class="field-grid styling-dependent-grid">
           <label class="field">
-            <span>source</span>
+            <span>Kaynak</span>
             <select data-accessory-field="source" data-index="${index}">
               ${renderLabeledOptionList(['reference', 'system'], source, getSourceLabel)}
             </select>
-            <p class="field-hint">Use reference for a specific asset. Let system choose keeps it automatic.</p>
+            <p class="field-hint">Belirli bir varlık için referansı kullanın. Sistem seçsin seçeneği davranışı otomatik tutar.</p>
           </label>
           ${usesPlacement ? `
             <label class="field">
-              <span>placement preference</span>
+              <span>Yerleşim</span>
               <select data-accessory-field="placement" data-index="${index}">
                 ${renderLabeledOptionList(placementOptions, placement, getPlacementLabel)}
               </select>
-              <p class="field-hint">Persisted as canonical intent for compile-time placement behavior.</p>
+              <p class="field-hint">Derleme sırasında kullanılmak üzere kanonik yerleşim niyeti olarak saklanır.</p>
             </label>
           ` : ''}
           ${supportsVariantControl ? `
             <label class="field">
-              <span>style type</span>
+              <span>Tür</span>
               <select data-accessory-field="variant" data-index="${index}">
                 ${renderOptionList(variants, selectedVariant)}
               </select>
             </label>
           ` : ''}
           <label class="field field-block${usesReference ? '' : ' is-hidden'}${usesReference ? '' : ' is-disabled'}">
-            <span>reference asset</span>
+            <span>Referans Varlığı</span>
             <select data-accessory-field="asset_id" data-index="${index}"${usesReference ? '' : ' disabled'}>
-              ${renderAssetOptionList(assetOptions, assetValue, 'No compatible references found')}
+              ${renderAssetOptionList(assetOptions, assetValue, 'Uygun referans bulunamadı')}
             </select>
-            <p class="field-hint">${usesReference && assetOptions.length === 0 ? 'No compatible references found.' : ''}</p>
+            <p class="field-hint">${usesReference && assetOptions.length === 0 ? 'Uygun referans bulunamadı.' : ''}</p>
           </label>
         </div>
       </div>
@@ -2071,7 +2074,7 @@ async function compileCurrentJob() {
     if (!response.ok) {
       state.validation = payload.validation || { errors: [], warnings: [] };
       state.lastCompileSucceeded = false;
-      throw new Error(payload.error || 'Compile failed');
+      throw new Error(payload.error || 'Derleme başarısız oldu');
     }
 
     state.compiledPrompt = payload.prompt;
@@ -2080,12 +2083,12 @@ async function compileCurrentJob() {
     state.validation = payload.validation || { errors: [], warnings: [] };
     state.compileError = '';
     state.lastCompileSucceeded = true;
-    showStatus('Compile successful.');
+    showStatus('Derleme başarılı.');
   } catch (error) {
     state.compiledPrompt = '';
     state.compiledCanonicalJob = null;
     state.imageConfig = null;
-    state.compileError = error.message || 'Compile failed';
+    state.compileError = error.message || 'Derleme başarısız oldu';
     state.lastCompileSucceeded = false;
     showStatus(state.compileError, true);
   } finally {
@@ -2107,14 +2110,14 @@ async function saveCurrentJob() {
     });
     const payload = await response.json();
     if (!response.ok) {
-      throw new Error(payload.error || 'Save failed');
+      throw new Error(payload.error || 'Kaydetme başarısız oldu');
     }
 
     const savedName = payload.saved?.name || null;
     await refreshJobsIndex(savedName);
-      showStatus(`Draft saved: ${payload.saved?.name || 'generated draft'}`);
+      showStatus(`Taslak kaydedildi: ${payload.saved?.name || 'oluşturulan taslak'}`);
   } catch (error) {
-    showStatus(error.message || 'Save failed', true);
+    showStatus(error.message || 'Kaydetme başarısız oldu', true);
   } finally {
     setActionBusy('save', false);
   }
@@ -2123,7 +2126,7 @@ async function saveCurrentJob() {
 async function loadSelectedSavedJob() {
   const selected = elements.savedJobSelect.value;
   if (!selected) {
-    showStatus('No saved job selected.', true);
+    showStatus('Kayıtlı bir iş seçilmedi.', true);
     return;
   }
 
@@ -2132,7 +2135,7 @@ async function loadSelectedSavedJob() {
     const response = await fetch(`/api/job-builder/jobs/${encodeURIComponent(selected)}?source=generated`);
     const payload = await response.json();
     if (!response.ok) {
-      throw new Error(payload.error || 'Failed to load saved job');
+      throw new Error(payload.error || 'Kayıtlı iş yüklenemedi');
     }
 
     state.job = mergeDefaultJob(payload.job || createFallbackJob());
@@ -2144,9 +2147,9 @@ async function loadSelectedSavedJob() {
     renderAccessoryItems();
     renderStylingUiState();
     renderAllSidePanels();
-    showStatus(`Loaded draft: ${selected}`);
+    showStatus(`Taslak yüklendi: ${selected}`);
   } catch (error) {
-    showStatus(error.message || 'Failed to load saved job', true);
+    showStatus(error.message || 'Kayıtlı iş yüklenemedi', true);
   } finally {
     setActionBusy('loadSaved', false);
   }
@@ -2162,19 +2165,19 @@ async function runDryBatchCheck() {
     });
     const payload = await response.json();
     if (!response.ok) {
-      throw new Error(payload.error || 'Dry batch check failed');
+      throw new Error(payload.error || 'Kuru kontrol başarısız oldu');
     }
     state.readiness = payload;
     renderReadiness();
-    showStatus(payload.ready ? 'Dry batch check: ready.' : 'Dry batch check: not ready.', !payload.ready);
+    showStatus(payload.ready ? 'Kuru kontrol: hazır.' : 'Kuru kontrol: hazır değil.', !payload.ready);
   } catch (error) {
     state.readiness = {
       ready: false,
-      errors: [error.message || 'Dry batch check failed'],
+      errors: [error.message || 'Kuru kontrol başarısız oldu'],
       warnings: [],
     };
     renderReadiness();
-    showStatus(error.message || 'Dry batch check failed', true);
+    showStatus(error.message || 'Kuru kontrol başarısız oldu', true);
   } finally {
     setActionBusy('dryCheck', false);
   }
@@ -2187,8 +2190,8 @@ async function runBatch() {
     batchJobName: null,
     batchState: null,
     durationMs: null,
-    command: 'node edit.js <generated-job>',
-    logs: 'Batch run in progress...',
+    command: 'node edit.js <oluşturulan-iş>',
+    logs: 'Toplu çalışma sürüyor...',
   };
   renderRunStatus();
 
@@ -2207,7 +2210,7 @@ async function runBatch() {
         state.readiness = payload.readiness;
         renderReadiness();
       }
-      throw new Error(payload.error || 'Run batch failed');
+      throw new Error(payload.error || 'Toplu çalışma başarısız oldu');
     }
 
     state.readiness = payload.readiness || state.readiness;
@@ -2225,12 +2228,12 @@ async function runBatch() {
       batchState: payload.state || null,
       durationMs: payload.durationMs || null,
       command: payload.command || '-',
-      logs: payload.logs || 'No logs.',
+      logs: payload.logs || 'Kayıt yok.',
     };
     renderRunStatus();
     const completionMessage = payload.success
-      ? 'Batch run completed. Use Batch Jobs to monitor status, download outputs, and review results.'
-      : 'Batch run failed.';
+      ? 'Toplu çalışma tamamlandı. Durumu izlemek, çıktıları indirmek ve sonuçları gözden geçirmek için Toplu İşler alanını kullanın.'
+      : 'Toplu çalışma başarısız oldu.';
     showStatus(completionMessage, !payload.success);
   } catch (error) {
     state.runStatus = {
@@ -2239,10 +2242,10 @@ async function runBatch() {
       batchState: null,
       durationMs: null,
       command: state.runStatus.command,
-      logs: error.message || 'Run batch failed',
+      logs: error.message || 'Toplu çalışma başarısız oldu.',
     };
     renderRunStatus();
-    showStatus(error.message || 'Run batch failed', true);
+    showStatus(error.message || 'Toplu çalışma başarısız oldu.', true);
   } finally {
     setActionBusy('runBatch', false);
   }
@@ -2251,14 +2254,14 @@ async function runBatch() {
 function renderPreviews() {
   if (elements.promptPreview) {
     elements.promptPreview.textContent = state.compileError
-      ? `Compile failed:\n${state.compileError}`
-      : (state.compiledPrompt || 'Compile the current job to preview the generated prompt.');
+      ? `Derleme başarısız:\n${state.compileError}`
+      : (state.compiledPrompt || 'Üretilen istemi görmek için mevcut işi derleyin.');
   }
 
   if (elements.jsonPreview) {
     elements.jsonPreview.textContent = state.compiledCanonicalJob
       ? JSON.stringify(state.compiledCanonicalJob, null, 2)
-      : 'Canonical JSON preview appears here.';
+      : 'Kanonik JSON önizlemesi burada görünür.';
   }
 
   if (elements.imageAspectRatio) {
@@ -2268,10 +2271,10 @@ function renderPreviews() {
     elements.imageSize.textContent = state.imageConfig?.imageSize || '-';
   }
   if (elements.compileStatus) {
-    elements.compileStatus.textContent = state.lastCompileSucceeded ? 'Success' : (state.compileError ? 'Failed' : 'Idle');
+    elements.compileStatus.textContent = state.lastCompileSucceeded ? 'Hazır' : (state.compileError ? 'Başarısız' : 'Boşta');
   }
   if (elements.actionBarCompileStatus) {
-    elements.actionBarCompileStatus.textContent = state.lastCompileSucceeded ? 'Success' : (state.compileError ? 'Failed' : 'Idle');
+    elements.actionBarCompileStatus.textContent = state.lastCompileSucceeded ? 'Hazır' : (state.compileError ? 'Başarısız' : 'Boşta');
   }
   renderValidation();
   renderConnectedResultSystem();
@@ -2288,25 +2291,25 @@ function renderValidation() {
 
   elements.validationWarnings.innerHTML = hasWarnings
     ? warnings.map((item) => `<li>${escapeHtml(item)}</li>`).join('')
-    : '<li>None</li>';
+    : '<li>Yok</li>';
   elements.validationErrors.innerHTML = hasErrors
     ? errors.map((item) => `<li>${escapeHtml(item)}</li>`).join('')
-    : '<li>None</li>';
+    : '<li>Yok</li>';
 
   if (hasErrors) {
-    elements.validationState.textContent = 'Validation state: errors detected.';
+    elements.validationState.textContent = 'Doğrulama durumu: hata var.';
     elements.validationState.className = 'validation-state error';
-    elements.validationSummary.textContent = `${errors.length} error(s)`;
+    elements.validationSummary.textContent = `${errors.length} hata`;
   } else if (hasWarnings) {
-    elements.validationState.textContent = 'Validation state: warnings detected.';
+    elements.validationState.textContent = 'Doğrulama durumu: uyarı var.';
     elements.validationState.className = 'validation-state warning';
-    elements.validationSummary.textContent = `${warnings.length} warning(s)`;
+    elements.validationSummary.textContent = `${warnings.length} uyarı`;
   } else {
     elements.validationState.textContent = state.lastCompileSucceeded
-      ? 'Validation state: OK.'
-      : (state.compileError ? 'Validation state: compile failed before validation summary.' : 'Validation state: no compile run yet.');
+      ? 'Doğrulama durumu: temiz.'
+      : (state.compileError ? 'Doğrulama durumu: özet üretilmeden önce derleme başarısız oldu.' : 'Doğrulama durumu: henüz derleme yapılmadı.');
     elements.validationState.className = state.compileError ? 'validation-state error' : 'validation-state ok';
-    elements.validationSummary.textContent = state.compileError ? 'Failed' : 'OK';
+    elements.validationSummary.textContent = state.compileError ? 'Başarısız' : 'Temiz';
   }
 }
 
@@ -2317,17 +2320,17 @@ function renderReadiness() {
   }
   const readiness = state.readiness;
   if (!readiness) {
-    elements.readinessBadge.textContent = 'Unknown';
+    elements.readinessBadge.textContent = 'Bilinmiyor';
     if (elements.actionBarReadinessStatus) {
-      elements.actionBarReadinessStatus.textContent = 'Unknown';
+      elements.actionBarReadinessStatus.textContent = 'Bilinmiyor';
     }
     elements.readinessInputExists.textContent = '-';
     elements.readinessInputCount.textContent = '-';
     elements.readinessRefsCount.textContent = '-';
-    elements.readinessState.textContent = 'No dry check run yet.';
+    elements.readinessState.textContent = 'Henüz kuru kontrol yapılmadı.';
     elements.readinessState.className = 'validation-state';
-    elements.readinessWarnings.innerHTML = '<li>None</li>';
-    elements.readinessErrors.innerHTML = '<li>None</li>';
+    elements.readinessWarnings.innerHTML = '<li>Yok</li>';
+    elements.readinessErrors.innerHTML = '<li>Yok</li>';
     renderConnectedResultSystem();
     return;
   }
@@ -2342,39 +2345,40 @@ function renderReadiness() {
     + (refs.headwear || 0)
     + (refs.accessoryFiles || 0);
 
-  elements.readinessBadge.textContent = readiness.ready ? 'READY' : 'NOT READY';
+  elements.readinessBadge.textContent = readiness.ready ? 'HAZIR' : 'HAZIR DEĞİL';
   if (elements.actionBarReadinessStatus) {
-    elements.actionBarReadinessStatus.textContent = readiness.ready ? 'Ready' : 'Not Ready';
+    elements.actionBarReadinessStatus.textContent = readiness.ready ? 'Hazır' : 'Hazır Değil';
   }
-  elements.readinessInputExists.textContent = readiness.inputSource?.exists ? 'Yes' : 'No';
+  elements.readinessInputExists.textContent = readiness.inputSource?.exists ? 'Evet' : 'Hayır';
   elements.readinessInputCount.textContent = String(readiness.inputSource?.fileCount ?? 0);
   elements.readinessRefsCount.textContent = String(refsCount);
   elements.readinessWarnings.innerHTML = warnings.length
     ? warnings.map((item) => `<li>${escapeHtml(item)}</li>`).join('')
-    : '<li>None</li>';
+    : '<li>Yok</li>';
   elements.readinessErrors.innerHTML = errors.length
     ? errors.map((item) => `<li>${escapeHtml(item)}</li>`).join('')
-    : '<li>None</li>';
+    : '<li>Yok</li>';
 
   if (readiness.ready) {
-    elements.readinessState.textContent = 'Dry check passed. Job is ready for batch run.';
+    elements.readinessState.textContent = 'Kuru kontrol geçti. İş toplu çalıştırmaya hazır.';
     elements.readinessState.className = 'validation-state ok';
   } else if (errors.length > 0) {
-    elements.readinessState.textContent = 'Dry check failed with blocking errors.';
+    elements.readinessState.textContent = 'Kuru kontrol engelleyici hatalarla başarısız oldu.';
     elements.readinessState.className = 'validation-state error';
   } else {
-    elements.readinessState.textContent = 'Dry check has warnings.';
+    elements.readinessState.textContent = 'Kuru kontrolde uyarılar var.';
     elements.readinessState.className = 'validation-state warning';
   }
   renderConnectedResultSystem();
 }
 
 function renderRunStatus() {
+  const statusLabel = getRunStatusLabel(state.runStatus.status);
   if (elements.runStatusBadge) {
-    elements.runStatusBadge.textContent = state.runStatus.status || 'idle';
+    elements.runStatusBadge.textContent = statusLabel;
   }
   if (elements.actionBarBatchStatus) {
-    elements.actionBarBatchStatus.textContent = state.runStatus.status || 'idle';
+    elements.actionBarBatchStatus.textContent = statusLabel;
   }
   if (elements.runBatchJobName) {
     elements.runBatchJobName.textContent = state.runStatus.batchJobName || '-';
@@ -2389,8 +2393,21 @@ function renderRunStatus() {
     elements.runCommand.textContent = state.runStatus.command || '-';
   }
   if (elements.runLogs) {
-    elements.runLogs.textContent = state.runStatus.logs || 'No run yet.';
+    elements.runLogs.textContent = state.runStatus.logs || 'Henüz çalıştırma yok.';
   }
+}
+
+function getRunStatusLabel(status) {
+  if (status === 'running') {
+    return 'Çalışıyor';
+  }
+  if (status === 'success') {
+    return 'Tamamlandı';
+  }
+  if (status === 'error') {
+    return 'Hata';
+  }
+  return 'Boşta';
 }
 
 function getCancellableBatch() {
@@ -2412,8 +2429,8 @@ function renderExecutionActions() {
   }
   if (elements.executionActionHint) {
     elements.executionActionHint.textContent = hasActiveBatch
-      ? `Active batch: ${activeBatch.batchName}`
-      : 'No active pending or running batch to cancel.';
+      ? `Etkin toplu iş: ${activeBatch.batchName}`
+      : 'İptal edilecek bekleyen ya da çalışan bir toplu iş yok.';
   }
 }
 
@@ -2442,22 +2459,22 @@ function deriveWorkflowType(job) {
 function renderWorkflowUi() {
   const workflow = state.workflowType || 'studio_cleanup';
   const descriptions = {
-    studio_cleanup: 'Clean and convert the selected inputs into a studio-ready catalog result.',
-    face_identity: 'Focus on model/person identity controls and related reference handling.',
-    styling: 'Focus on worn items and visible styling changes without exposing unrelated controls.',
-    advanced: 'Use the full authoring surface, including advanced overrides and internal tooling.',
+    studio_cleanup: 'Seçili girdileri stüdyo hazır katalog çıktısına dönüştürün.',
+    face_identity: 'Model / konu kimliği ayarlarına ve ilgili referans kullanımına odaklanın.',
+    styling: 'İlgisiz kontrolleri açmadan giyilen öğe ve görünür stil değişikliklerine odaklanın.',
+    advanced: 'Gelişmiş geçersiz kılmalar ve iç araçlar dahil tam düzenleme yüzeyini kullanın.',
   };
   const visibleSummaries = {
-    studio_cleanup: 'Visible now: core setup, model/person basics, garment basics, output type, readiness, and execution.',
-    face_identity: 'Visible now: core setup, model/person identity controls, output type, readiness, and execution.',
-    styling: 'Visible now: core setup, styling / worn items, output type, readiness, and execution.',
-    advanced: 'Visible now: the full authoring surface, advanced garment controls, developer tools, readiness, and execution.',
+    studio_cleanup: 'Şu an görünenler: temel kurulum, model / konu temeli, ürün / giysi temeli, çıktı tipi, hazırlık ve çalıştırma.',
+    face_identity: 'Şu an görünenler: temel kurulum, model / konu kimliği kontrolleri, çıktı tipi, hazırlık ve çalıştırma.',
+    styling: 'Şu an görünenler: temel kurulum, stil / giyilen öğeler, çıktı tipi, hazırlık ve çalıştırma.',
+    advanced: 'Şu an görünenler: tam düzenleme yüzeyi, gelişmiş giysi kontrolleri, iç araçlar, hazırlık ve çalıştırma.',
   };
   const configurationHints = {
-    studio_cleanup: 'Adjust only the essentials for cleanup: model/person basics and product / garment basics.',
-    face_identity: 'Keep configuration focused on model/person behavior and identity reference handling.',
-    styling: 'Focus configuration on footwear, headwear, and accessory changes.',
-    advanced: 'All configuration sections are available, including advanced garment and internal controls.',
+    studio_cleanup: 'Temizlik akışı için yalnızca temel ayarları kullanın: model / konu ve ürün / giysi temeli.',
+    face_identity: 'Yapılandırmayı model / konu davranışı ve kimlik referansı üzerinde tutun.',
+    styling: 'Yapılandırmayı ayakkabı, başlık ve aksesuar kararlarına odaklayın.',
+    advanced: 'Gelişmiş giysi ve iç kontrol alanları dahil tüm yapılandırma bölümleri açıktır.',
   };
 
   if (elements.workflowDescription) {
@@ -2510,7 +2527,7 @@ function renderStylingUiState() {
   elements.footwearModeHint.textContent = getFootwearModeHint(footwearMode);
   if (elements.footwearAssetHint) {
     elements.footwearAssetHint.textContent = footwearUsesReference && getFootwearAssets().length === 0
-      ? 'No compatible references found.'
+      ? 'Uygun referans bulunamadı.'
       : '';
   }
 
@@ -2535,7 +2552,7 @@ function renderStylingUiState() {
   elements.headwearModeHint.textContent = getHeadwearModeHint(headwearMode);
   if (elements.headwearAssetHint) {
     elements.headwearAssetHint.textContent = headwearUsesReference && getHeadwearAssets().length === 0
-      ? 'No compatible references found.'
+      ? 'Uygun referans bulunamadı.'
       : '';
   }
 
@@ -2585,8 +2602,8 @@ function renderBatchJobs() {
       const downloadDisabled = canDownload ? '' : ' disabled';
       const outputsDisabled = canViewOutputs ? '' : ' disabled';
       const indicatorClass = downloadNeeded ? 'warn' : 'ok';
-      const indicatorText = downloadNeeded ? '[DL] Download needed' : (batch.downloaded ? '[OK] Downloaded' : '[--] Not downloaded');
-      const errorText = batch.lastError ? `<p class="batch-job-meta">Error: ${escapeHtml(batch.lastError)}</p>` : '';
+      const indicatorText = downloadNeeded ? '[DL] İndirme gerekli' : (batch.downloaded ? '[OK] İndirildi' : '[--] İndirilmedi');
+      const errorText = batch.lastError ? `<p class="batch-job-meta">Hata: ${escapeHtml(batch.lastError)}</p>` : '';
 
       return `
         <article class="batch-job-card">
@@ -2594,18 +2611,18 @@ function renderBatchJobs() {
             <p class="batch-job-name" title="${escapeAttribute(batchName)}">${escapeHtml(batchName)}</p>
             <span class="status-badge ${statusClass}">${escapeHtml(status)}</span>
           </div>
-          <p class="batch-job-meta">Source: ${escapeHtml(source)}</p>
-          <p class="batch-job-meta">Created: ${escapeHtml(createdAt)}</p>
-          <p class="batch-job-meta">Last checked: ${escapeHtml(lastChecked)}</p>
+          <p class="batch-job-meta">Kaynak: ${escapeHtml(source)}</p>
+          <p class="batch-job-meta">Oluşturulma: ${escapeHtml(createdAt)}</p>
+          <p class="batch-job-meta">Son kontrol: ${escapeHtml(lastChecked)}</p>
           <div class="batch-indicators">
             <span class="indicator-pill ${indicatorClass}">${escapeHtml(indicatorText)}</span>
-            <span class="indicator-pill">${cancelled ? 'Cancelled flag: yes' : 'Cancelled flag: no'}</span>
+            <span class="indicator-pill">${cancelled ? 'İptal işareti: evet' : 'İptal işareti: hayır'}</span>
           </div>
           ${errorText}
           <div class="batch-actions">
-            <button class="button button-small button-secondary" data-batch-action="refresh" data-batch-name="${escapeAttribute(batchName)}"${refreshDisabled}>Refresh Status</button>
-            <button class="button button-small" data-batch-action="download" data-batch-name="${escapeAttribute(batchName)}"${downloadDisabled}>Download</button>
-            <button class="button button-small button-secondary" data-batch-action="view-outputs" data-batch-name="${escapeAttribute(batchName)}"${outputsDisabled}>View Outputs</button>
+            <button class="button button-small button-secondary" data-batch-action="refresh" data-batch-name="${escapeAttribute(batchName)}"${refreshDisabled}>Durumu Yenile</button>
+            <button class="button button-small" data-batch-action="download" data-batch-name="${escapeAttribute(batchName)}"${downloadDisabled}>İndir</button>
+            <button class="button button-small button-secondary" data-batch-action="view-outputs" data-batch-name="${escapeAttribute(batchName)}"${outputsDisabled}>Çıktıları Gör</button>
           </div>
         </article>
       `;
@@ -2650,13 +2667,13 @@ function renderJobsPanel(selectedName = null) {
 
   elements.generatedJobsList.innerHTML = generated.length
     ? generated.map((item) => `<li>${escapeHtml(item.name)}</li>`).join('')
-    : '<li>None</li>';
+    : '<li>Yok</li>';
   elements.sampleJobsList.innerHTML = sample.length
     ? sample.map((item) => `<li>${escapeHtml(item.name)}</li>`).join('')
-    : '<li>None</li>';
+    : '<li>Yok</li>';
 
   if (generated.length === 0) {
-    elements.savedJobSelect.innerHTML = '<option value="">No saved jobs</option>';
+    elements.savedJobSelect.innerHTML = '<option value="">Kayıtlı iş yok</option>';
     elements.savedJobSelect.disabled = true;
     return;
   }
@@ -2740,20 +2757,20 @@ function setActionBusy(action, isBusy) {
   state.busy[action] = isBusy;
 
   elements.compileButton.disabled = state.busy.compile;
-  elements.compileButton.textContent = state.busy.compile ? 'Compiling...' : 'Compile Prompt';
+  elements.compileButton.textContent = state.busy.compile ? 'Derleniyor...' : 'Derle';
 
   elements.saveJobButton.disabled = state.busy.save;
-  elements.saveJobButton.textContent = state.busy.save ? 'Saving Draft...' : 'Save Draft';
+  elements.saveJobButton.textContent = state.busy.save ? 'Taslak kaydediliyor...' : 'Taslağı Kaydet';
 
   elements.loadSavedJobButton.disabled = state.busy.loadSaved;
-  elements.loadSavedJobButton.textContent = state.busy.loadSaved ? 'Loading Draft...' : 'Load Draft';
+  elements.loadSavedJobButton.textContent = state.busy.loadSaved ? 'Taslak yükleniyor...' : 'Taslağı Yükle';
   elements.savedJobSelect.disabled = state.busy.loadSaved || !((state.jobs?.generated || []).length);
 
   elements.runDryCheckButton.disabled = state.busy.dryCheck;
-  elements.runDryCheckButton.textContent = state.busy.dryCheck ? 'Checking...' : 'Run Dry Check';
+  elements.runDryCheckButton.textContent = state.busy.dryCheck ? 'Kontrol ediliyor...' : 'Kuru Kontrol';
 
   elements.runBatchButton.disabled = state.busy.runBatch;
-  elements.runBatchButton.textContent = state.busy.runBatch ? 'Running...' : 'Run Batch';
+  elements.runBatchButton.textContent = state.busy.runBatch ? 'Çalışıyor...' : 'Toplu Çalıştır';
   if (elements.runSpinner) {
     elements.runSpinner.hidden = !state.busy.runBatch;
   }
@@ -2761,7 +2778,7 @@ function setActionBusy(action, isBusy) {
   const batchBusy = state.busy.refreshBatches || state.busy.batchAction;
   if (elements.refreshAllBatchesButton) {
     elements.refreshAllBatchesButton.disabled = batchBusy;
-    elements.refreshAllBatchesButton.textContent = state.busy.batchAction ? 'Refreshing...' : 'Refresh All';
+    elements.refreshAllBatchesButton.textContent = state.busy.batchAction ? 'Yenileniyor...' : 'Tümünü Yenile';
   }
   if (elements.batchFilterSelect) {
     elements.batchFilterSelect.disabled = batchBusy;
@@ -2792,9 +2809,9 @@ function applyPendingInputSetBinding() {
   syncStateFromForm();
   const result = injectInputSetBinding(payload);
   if (!result || result.isError) {
-    return result || {
+      return result || {
       isError: true,
-      message: 'Failed to apply pending input set binding.',
+      message: 'Bekleyen girdi kümesi bağı uygulanamadı.',
     };
   }
 
@@ -2819,9 +2836,9 @@ function applyPendingAssetBinding() {
   syncStateFromForm();
   const result = injectAssetBinding(payload);
   if (!result || result.isError) {
-    return result || {
+      return result || {
       isError: true,
-      message: 'Failed to apply pending asset binding.',
+      message: 'Bekleyen varlık bağı uygulanamadı.',
     };
   }
 
@@ -2870,7 +2887,7 @@ function injectInputSetBinding(binding) {
     return {
       changed: false,
       isError: true,
-      message: 'Input set binding payload is invalid.',
+      message: 'Girdi kümesi bağlama verisi geçersiz.',
     };
   }
 
@@ -2880,7 +2897,7 @@ function injectInputSetBinding(binding) {
     return {
       changed: false,
       isError: true,
-      message: `Input set not found for binding: ${inputSetId}`,
+      message: `Bağlanacak girdi kümesi bulunamadı: ${inputSetId}`,
     };
   }
 
@@ -2896,8 +2913,8 @@ function injectInputSetBinding(binding) {
     changed,
     isError: false,
     message: changed
-      ? `${setItem.inputSetId} applied to inputSource.`
-      : `${setItem.inputSetId} is already selected as inputSource.`,
+      ? `${setItem.inputSetId} girdi kaynağına uygulandı.`
+      : `${setItem.inputSetId} zaten seçili girdi kaynağı.`,
   };
 }
 
@@ -2937,7 +2954,7 @@ function injectAssetBinding(binding) {
     return {
       changed: false,
       isError: true,
-      message: 'Asset binding payload is invalid.',
+      message: 'Varlık bağlama verisi geçersiz.',
     };
   }
 
@@ -2968,8 +2985,8 @@ function injectAssetBinding(binding) {
       changed,
       isError: false,
       message: changed
-        ? `${assetId} applied to Footwear.`
-        : `${assetId} is already applied to Footwear.`,
+        ? `${assetId} Ayakkabı alanına bağlandı.`
+        : `${assetId} zaten Ayakkabı alanına bağlı.`,
     };
   }
 
@@ -2997,8 +3014,8 @@ function injectAssetBinding(binding) {
       changed,
       isError: false,
       message: changed
-        ? `${assetId} applied to Headwear.`
-        : `${assetId} is already applied to Headwear.`,
+        ? `${assetId} Başlık alanına bağlandı.`
+        : `${assetId} zaten Başlık alanına bağlı.`,
     };
   }
 
@@ -3018,10 +3035,10 @@ function injectAssetBinding(binding) {
     ));
     if (identical) {
       state.job = job;
-      return {
+        return {
         changed,
         isError: false,
-        message: `${assetId} is already applied to Accessory > ${family}.`,
+        message: `${assetId} zaten Aksesuar > ${family} alanına bağlı.`,
       };
     }
 
@@ -3067,8 +3084,8 @@ function injectAssetBinding(binding) {
       changed,
       isError: false,
       message: changed
-        ? `${assetId} applied to Accessory > ${family}.`
-        : `${assetId} is already applied to Accessory > ${family}.`,
+        ? `${assetId} Aksesuar > ${family} alanına bağlandı.`
+        : `${assetId} zaten Aksesuar > ${family} alanına bağlı.`,
     };
   }
 
@@ -3086,8 +3103,8 @@ function injectAssetBinding(binding) {
       changed,
       isError: false,
       message: changed
-        ? `${assetId} applied to Garment > Material details.`
-        : `${assetId} is already in Garment > Material details.`,
+        ? `${assetId} Giysi > Kumaş detayları alanına bağlandı.`
+        : `${assetId} zaten Giysi > Kumaş detayları alanında.`,
     };
   }
 
@@ -3105,15 +3122,15 @@ function injectAssetBinding(binding) {
       changed,
       isError: false,
       message: changed
-        ? `${assetId} applied to Garment > Pattern details.`
-        : `${assetId} is already in Garment > Pattern details.`,
+        ? `${assetId} Giysi > Desen detayları alanına bağlandı.`
+        : `${assetId} zaten Giysi > Desen detayları alanında.`,
     };
   }
 
   return {
     changed: false,
     isError: true,
-    message: `Unsupported asset family for binding: ${family}`,
+    message: `Bu varlık ailesi için bağlama desteklenmiyor: ${family}`,
   };
 }
 
@@ -3131,7 +3148,7 @@ function clearDerivedStates() {
     batchState: null,
     durationMs: null,
     command: '-',
-    logs: 'No run yet.',
+    logs: 'Henüz çalıştırma yok.',
   };
 }
 
@@ -3152,7 +3169,7 @@ async function copyText(text, successMessage) {
     await navigator.clipboard.writeText(text);
     showStatus(successMessage);
   } catch (error) {
-    showStatus(`Copy failed: ${error.message}`, true);
+    showStatus(`Kopyalama başarısız: ${error.message}`, true);
   }
 }
 
@@ -3385,31 +3402,31 @@ function normalizeStylingUiJob(job) {
 
 function getFootwearModeHint(mode) {
   if (mode === 'replace') {
-    return 'Replace = enforce the uploaded footwear reference as override authority.';
+    return 'Değiştir: yüklenen ayakkabı referansını yetkili geçersiz kılma kaynağı olarak uygula.';
   }
   if (mode === 'preserve') {
-    return 'Keep Original = stay loyal to the footwear state already present in the target image.';
+    return 'Koru: hedef görseldeki mevcut ayakkabı durumuna sadık kal.';
   }
   if (mode === 'remove') {
-    return 'Remove = footwear will be removed from the result.';
+    return 'Kaldır: ayakkabı sonuçtan çıkarılır.';
   }
-  return 'Legacy Ignore = preserved as compatibility only; authored jobs should use Keep Original.';
+  return 'Eski Yok Say yalnızca uyumluluk için tutulur; yeni işlerde Koru kullanılmalıdır.';
 }
 
 function getHeadwearModeHint(mode) {
   if (mode === 'preserve') {
-    return 'Preserve = keep the original target-image headwear state, and do not activate uploaded authority.';
+    return 'Koru: hedef görseldeki mevcut başlık durumunu koru; yüklenen varlık yetki kazanmaz.';
   }
   if (mode === 'add') {
-    return 'Add = enforce the uploaded headwear reference as a new addition when reference source is active.';
+    return 'Ekle: referans kaynağı açıkken yüklenen başlık referansını yeni ekleme olarak uygula.';
   }
   if (mode === 'replace') {
-    return 'Replace = enforce the uploaded headwear reference as override authority.';
+    return 'Değiştir: yüklenen başlık referansını yetkili geçersiz kılma kaynağı olarak uygula.';
   }
   if (mode === 'remove') {
-    return 'Remove = headwear will be removed from the result.';
+    return 'Kaldır: başlık sonuçtan çıkarılır.';
   }
-  return 'Legacy Ignore = preserved as compatibility only; authored jobs should use Preserve.';
+  return 'Eski Yok Say yalnızca uyumluluk için tutulur; yeni işlerde Koru kullanılmalıdır.';
 }
 
 function getSubjectReferences() {
@@ -3454,9 +3471,9 @@ function renderInputSourceHint() {
     return;
   }
   if ((state.managedInputSets || []).length > 0) {
-    elements.inputSourceHint.textContent = `Managed input sets available: ${state.managedInputSets.length}. Create one here or use Manage Input Sets for full administration.`;
+    elements.inputSourceHint.textContent = `${state.managedInputSets.length} yönetilen girdi kümesi hazır. Buradan yeni küme oluşturabilir ya da Girdi Kümelerini Yönet alanına geçebilirsiniz.`;
   } else {
-    elements.inputSourceHint.textContent = 'No managed input sets found. Create one here or use Manage Input Sets for the full library.';
+    elements.inputSourceHint.textContent = 'Henüz yönetilen girdi kümesi yok. Buradan oluşturabilir ya da Girdi Kümelerini Yönet alanını kullanabilirsiniz.';
   }
 }
 
@@ -3466,14 +3483,14 @@ function renderInputSourceSummary() {
   }
   const selectedPath = String(elements.inputSource?.value || state.job?.inputSource || '').trim();
   if (!selectedPath) {
-    elements.inputSourceSummary.textContent = 'No input source selected yet.';
+    elements.inputSourceSummary.textContent = 'Henüz bir girdi kaynağı seçilmedi.';
   } else {
     const managedSet = (state.managedInputSets || []).find((setItem) => String(setItem.path || '').trim() === selectedPath);
     if (managedSet) {
       const fileCount = Number(managedSet.fileCount || 0);
-      elements.inputSourceSummary.textContent = `${managedSet.name || managedSet.inputSetId || selectedPath} • ${fileCount} image${fileCount === 1 ? '' : 's'}`;
+      elements.inputSourceSummary.textContent = `${managedSet.name || managedSet.inputSetId || selectedPath} • ${fileCount} görsel`;
     } else if (selectedPath === 'batch_input') {
-      elements.inputSourceSummary.textContent = 'Using the default batch_input directory for this run.';
+      elements.inputSourceSummary.textContent = 'Bu çalışma için varsayılan batch_input klasörü kullanılıyor.';
     } else {
       elements.inputSourceSummary.textContent = selectedPath;
     }
@@ -3490,8 +3507,8 @@ function renderOutputTypeUi() {
   const mode = String(elements.outputProfileMode?.value || state.job?.entities?.output_profile?.mode || 'apply');
   const profile = String(elements.outputProfileProfile?.value || state.job?.entities?.output_profile?.profile || '').trim();
   elements.outputTypeHint.textContent = mode === 'ignore'
-    ? 'This draft is currently using default output behavior.'
-    : `Active output type: ${profile || 'default'}.`;
+    ? 'Bu taslak şu anda varsayılan çıktı davranışını kullanıyor.'
+    : `Etkin çıktı profili: ${profile || 'varsayılan'}.`;
 }
 
 function renderReviewSummary() {
@@ -3512,14 +3529,14 @@ function renderReviewSummary() {
   }
 
   const summaryItems = [
-    ['Target inputs', getInputSourceSummaryValue()],
-    ['Workflow', getWorkflowLabel(state.workflowType)],
-    ['Model / Person', `${job.entities.subject.mode}${job.entities.subject.reference_id ? ` • ${job.entities.subject.reference_id}` : ''}`],
-    ['Product / Garment', job.entities.garment.mode || 'preserve'],
-    ['Styling', stylingParts.length > 0 ? stylingParts.join(' • ') : 'No styling controls active'],
-    ['Output type', job.entities.output_profile.mode === 'ignore'
-      ? 'Default output behavior'
-      : (job.entities.output_profile.profile || 'Default output behavior')],
+    ['Hedef girdiler', getInputSourceSummaryValue()],
+    ['Akış', getWorkflowLabel(state.workflowType)],
+    ['Model / Konu', `${getIdentityModeLabel(state.ui.model.identityMode)}${job.entities.subject.reference_id ? ` • ${job.entities.subject.reference_id}` : ''}`],
+    ['Ürün / Giysi', getProductLayerSummary()],
+    ['Stil / Aksesuar', stylingParts.length > 0 ? stylingParts.join(' • ') : 'Aktif stil kararı yok'],
+    ['Çıktı', job.entities.output_profile.mode === 'ignore'
+      ? 'Varsayılan çıktı davranışı'
+      : (job.entities.output_profile.profile || 'Varsayılan çıktı davranışı')],
   ];
 
   elements.reviewSummary.innerHTML = summaryItems
@@ -3553,9 +3570,6 @@ function syncVisibleShellFromCanonical() {
     }
   }
 
-  if (!state.ui.styling.openPanel) {
-    state.ui.styling.openPanel = 'eyewear';
-  }
 }
 
 function renderVisibleModelShell() {
@@ -3575,8 +3589,8 @@ function renderVisibleModelShell() {
   }
   if (elements.subjectReferencePickerHint) {
     elements.subjectReferencePickerHint.textContent = getSubjectReferences().length > 0
-      ? 'Select an existing subject reference without leaving Production Flow.'
-      : 'No managed subject references were found in this workspace.';
+      ? 'Üretim Akışı içinden mevcut bir konu referansı seçin.'
+      : 'Bu çalışma alanında yönetilen konu referansı bulunamadı.';
   }
   if (elements.identityReplaceDropzone) {
     elements.identityReplaceDropzone.hidden = state.ui.model.identityMode !== 'replace';
@@ -3586,10 +3600,10 @@ function renderVisibleModelShell() {
     elements.identityReferencePreview.hidden = !hasPreview;
     if (hasPreview && elements.identityReferencePreviewImage && elements.identityReferenceName) {
       elements.identityReferencePreviewImage.src = state.ui.model.identityPreviewUrl;
-      elements.identityReferenceName.textContent = state.ui.model.identityReferenceName || 'reference_face';
+      elements.identityReferenceName.textContent = state.ui.model.identityReferenceName || 'konu_referansi';
     } else if (elements.identityReferencePreviewImage && elements.identityReferenceName) {
       elements.identityReferencePreviewImage.src = '';
-      elements.identityReferenceName.textContent = 'No file selected';
+      elements.identityReferenceName.textContent = 'Dosya seçilmedi';
     }
   }
 
@@ -3605,13 +3619,13 @@ function renderVisibleProductShell() {
 
   applySegmentedState(elements.productIntentButtons, state.ui.productIntent, 'productIntent');
   if (elements.productHelperText) {
-    elements.productHelperText.textContent = getProductIntentHelperText(state.ui.productIntent);
+    elements.productHelperText.textContent = getProductLayerHelperText();
   }
 
   const preview = getPrimaryInputPreview();
   if (preview?.url && elements.productBeforeImage && elements.productBeforeEmpty) {
     elements.productBeforeImage.src = preview.url;
-    elements.productBeforeImage.alt = preview.fileName || 'Selected input preview';
+    elements.productBeforeImage.alt = preview.fileName || 'Seçili girdi önizlemesi';
     elements.productBeforeImage.hidden = false;
     elements.productBeforeEmpty.hidden = true;
   } else if (elements.productBeforeImage && elements.productBeforeEmpty) {
@@ -3619,6 +3633,151 @@ function renderVisibleProductShell() {
     elements.productBeforeImage.src = '';
     elements.productBeforeEmpty.hidden = false;
   }
+
+  renderProductGroupContext();
+  renderProductReferenceSummary();
+}
+
+function getGarmentDetailRefs() {
+  const job = mergeDefaultJob(state.job);
+  return {
+    material: Array.isArray(job.entities?.garment?.detail_refs?.material)
+      ? job.entities.garment.detail_refs.material.filter(Boolean)
+      : [],
+    pattern: Array.isArray(job.entities?.garment?.detail_refs?.pattern)
+      ? job.entities.garment.detail_refs.pattern.filter(Boolean)
+      : [],
+  };
+}
+
+function getProductGroupContextSummary() {
+  const selectedSet = getSelectedManagedInputSet();
+  const images = resolveManagedSetImages(selectedSet);
+  const inputSource = getInputSourceSummaryValue();
+  const imageCount = Number(selectedSet?.fileCount || images.length || 0);
+  const groupName = selectedSet?.name || selectedSet?.inputSetId || inputSource;
+  const rangeNote = selectedSet
+    ? (imageCount > 1
+      ? 'Kümedeki tüm açılar tek ürün grubu olarak ele alınır.'
+      : 'Bu giriş tek ürün grubu olarak ele alınır.')
+    : 'Referanslar görsel tek tek değil, ürün grubu düzeyinde bağlanır.';
+
+  return {
+    groupName,
+    imageCount,
+    createdAt: formatDateLabel(selectedSet?.createdAt || '-'),
+    scopeLabel: 'Ürün bazlı uygulama',
+    selectionLabel: 'Ürün grubu',
+    rangeNote,
+  };
+}
+
+function renderProductGroupContext() {
+  if (!elements.productGroupContext) {
+    return;
+  }
+
+  const context = getProductGroupContextSummary();
+  elements.productGroupContext.innerHTML = `
+    <div class="product-group-card">
+      <div class="product-group-header">
+        <strong>${escapeHtml(context.groupName)}</strong>
+        <span class="product-group-badge">${escapeHtml(context.scopeLabel)}</span>
+      </div>
+      <div class="product-group-meta">
+        <div class="product-group-meta-item">
+          <span class="review-card-label">${escapeHtml(context.selectionLabel)}</span>
+          <strong>${escapeHtml(context.groupName)}</strong>
+        </div>
+        <div class="product-group-meta-item">
+          <span class="review-card-label">Görünüm Sayısı</span>
+          <strong>${escapeHtml(String(context.imageCount || '-'))}</strong>
+        </div>
+        <div class="product-group-meta-item">
+          <span class="review-card-label">Bağlantı Mantığı</span>
+          <strong>Bu ürün grubuna bağla</strong>
+        </div>
+      </div>
+      <p class="product-group-note">${escapeHtml(context.rangeNote)}</p>
+    </div>
+  `;
+}
+
+function renderProductReferenceSummary() {
+  if (!elements.productReferenceSummary) {
+    return;
+  }
+
+  const refs = getGarmentDetailRefs();
+  const totalRefs = refs.material.length + refs.pattern.length;
+  const cards = [
+    {
+      title: 'Kumaş Referansı',
+      count: refs.material.length,
+      tone: refs.material.length > 0 ? 'is-linked' : '',
+      note: refs.material.length > 0
+        ? 'Malzeme ve yüzey karakterini güçlendirir.'
+        : 'Henüz referans bağlı değil.',
+      values: refs.material,
+    },
+    {
+      title: 'Desen / Doku Referansı',
+      count: refs.pattern.length,
+      tone: refs.pattern.length > 0 ? 'is-linked' : '',
+      note: refs.pattern.length > 0
+        ? 'Desen ve doku yönünü korur.'
+        : 'Henüz referans bağlı değil.',
+      values: refs.pattern,
+    },
+    {
+      title: 'Detay Referansları',
+      count: totalRefs,
+      tone: totalRefs > 0 ? 'is-linked' : '',
+      note: totalRefs > 0
+        ? 'Bağlı referanslar uygun görünümlere ürün bazlı uygulanır.'
+        : 'Referanslar ürün grubu bağlamında kullanılacaktır.',
+      values: totalRefs > 0 ? [`${totalRefs} referans bağlı`] : [],
+    },
+  ];
+
+  elements.productReferenceSummary.innerHTML = cards
+    .map((card) => `
+      <article class="product-reference-card ${escapeAttribute(card.tone)}">
+        <div class="product-reference-top">
+          <div>
+            <p class="product-reference-title">${escapeHtml(card.title)}</p>
+            <p class="product-reference-note">${escapeHtml(card.note)}</p>
+          </div>
+          <span class="product-reference-count">${escapeHtml(String(card.count))}</span>
+        </div>
+        <div class="product-reference-pills">
+          ${card.values.length > 0
+            ? card.values.map((value) => `<span class="product-reference-pill">${escapeHtml(value)}</span>`).join('')
+            : '<span class="product-reference-empty">Referans yok</span>'}
+        </div>
+      </article>
+    `)
+    .join('');
+}
+
+function getProductLayerSummary() {
+  const refs = getGarmentDetailRefs();
+  const parts = [getProductIntentLabel(state.ui.productIntent), 'Ürün bazlı uygulama'];
+  if (refs.material.length > 0) {
+    parts.push(`${refs.material.length} kumaş referansı`);
+  }
+  if (refs.pattern.length > 0) {
+    parts.push(`${refs.pattern.length} desen / doku referansı`);
+  }
+  return parts.join(' • ');
+}
+
+function getProductLayerHelperText() {
+  const refs = getGarmentDetailRefs();
+  if (refs.material.length === 0 && refs.pattern.length === 0) {
+    return `${getProductIntentHelperText(state.ui.productIntent)} Ürün grubu düzeyinde uygulanır.`;
+  }
+  return `Ürün bazlı uygulama • ${refs.material.length} kumaş • ${refs.pattern.length} desen / doku`;
 }
 
 function renderTargetInputManager() {
@@ -3637,20 +3796,20 @@ function renderTargetInputManager() {
       <div class="input-set-selected-card">
         <div class="input-set-meta-grid">
           <div class="input-set-meta-item">
-            <span class="review-card-label">Set Name</span>
+            <span class="review-card-label">Küme Adı</span>
             <strong>${escapeHtml(selectedPath)}</strong>
           </div>
           <div class="input-set-meta-item">
-            <span class="review-card-label">Image Count</span>
+            <span class="review-card-label">Görsel Sayısı</span>
             <strong>-</strong>
           </div>
           <div class="input-set-meta-item">
-            <span class="review-card-label">Upload Date</span>
+            <span class="review-card-label">Yükleme Tarihi</span>
             <strong>-</strong>
           </div>
         </div>
         <div class="preview-frame input-set-primary-frame">
-          <div class="preview-empty">No managed input set preview is available for this source.</div>
+          <div class="preview-empty">Bu kaynak için yönetilen girdi kümesi önizlemesi yok.</div>
         </div>
       </div>
     `;
@@ -3659,7 +3818,7 @@ function renderTargetInputManager() {
 
   const previewMarkup = preview?.url
     ? `<img src="${escapeAttribute(preview.url)}" alt="${escapeAttribute(preview.fileName || setItem.name || setItem.inputSetId)}" loading="lazy" />`
-    : '<div class="preview-empty">No previewable images found for this set.</div>';
+    : '<div class="preview-empty">Bu küme için önizlenebilir görsel bulunamadı.</div>';
 
   const thumbsMarkup = thumbImages.length > 0
     ? thumbImages
@@ -3669,21 +3828,21 @@ function renderTargetInputManager() {
         </div>
       `)
       .join('')
-    : '<div class="styling-panel-note">Supporting thumbnails appear here when the input set contains more than one image.</div>';
+    : '<div class="styling-panel-note">Girdi kümesinde birden fazla görsel varsa destekleyici küçük önizlemeler burada görünür.</div>';
 
   elements.targetInputSummary.innerHTML = `
     <div class="input-set-selected-card">
       <div class="input-set-meta-grid">
         <div class="input-set-meta-item">
-          <span class="review-card-label">Set Name</span>
+          <span class="review-card-label">Küme Adı</span>
           <strong>${escapeHtml(setItem.name || setItem.inputSetId)}</strong>
         </div>
         <div class="input-set-meta-item">
-          <span class="review-card-label">Image Count</span>
+          <span class="review-card-label">Görsel Sayısı</span>
           <strong>${escapeHtml(String(setItem.fileCount || images.length || 0))}</strong>
         </div>
         <div class="input-set-meta-item">
-          <span class="review-card-label">Upload Date</span>
+          <span class="review-card-label">Yükleme Tarihi</span>
           <strong>${escapeHtml(formatDateLabel(setItem.createdAt || '-'))}</strong>
         </div>
       </div>
@@ -3705,8 +3864,8 @@ function renderStylingAccordion() {
   }
 
   const families = ['eyewear', 'bag', 'headwear', 'footwear'];
-  if (!families.includes(state.ui.styling.openPanel)) {
-    state.ui.styling.openPanel = 'eyewear';
+  if (state.ui.styling.openPanel && !families.includes(state.ui.styling.openPanel)) {
+    state.ui.styling.openPanel = '';
   }
 
   elements.stylingAccordion.innerHTML = families
@@ -3724,7 +3883,7 @@ function renderStylingAccordionItem(family, isOpen) {
   const sourceMarkup = showSource
     ? `
       <div class="styling-control-group">
-        <span class="styling-control-group-label">Source</span>
+        <span class="styling-control-group-label">Kaynak</span>
         <div class="segmented-control segmented-control-wide">
           ${renderStylingOptionButtons(family, 'source', ['reference', 'system'], config.source, getShortSourceLabel)}
         </div>
@@ -3734,7 +3893,7 @@ function renderStylingAccordionItem(family, isOpen) {
   const placementMarkup = showPlacement
     ? `
       <div class="styling-control-group">
-        <span class="styling-control-group-label">Placement</span>
+        <span class="styling-control-group-label">Yerleşim</span>
         <div class="pill-group">
           ${renderStylingOptionButtons(family, 'placement', config.placementOptions, config.placement, getPlacementLabel, 'pill')}
         </div>
@@ -3744,7 +3903,7 @@ function renderStylingAccordionItem(family, isOpen) {
   const variantMarkup = showVariant
     ? `
       <div class="styling-control-group">
-        <span class="styling-control-group-label">Style Type</span>
+        <span class="styling-control-group-label">Tür</span>
         <div class="pill-group">
           ${renderStylingOptionButtons(family, 'variant', config.variantOptions, config.variant, formatEnumLabel, 'pill')}
         </div>
@@ -3756,21 +3915,21 @@ function renderStylingAccordionItem(family, isOpen) {
     ? (assetChoices.length > 0
       ? `
         <div class="styling-control-group">
-          <span class="styling-control-group-label">Reference Selection</span>
+          <span class="styling-control-group-label">Referans Seçimi</span>
           <div class="styling-thumb-strip">
             ${assetChoices.map((asset) => renderStylingAssetChoice(family, asset, config.assetId)).join('')}
           </div>
         </div>
       `
-      : '<div class="styling-empty-strip">No compatible reference assets are available yet for this family.</div>')
+      : '<div class="styling-empty-strip">Bu aile için henüz uygun referans varlığı yok.</div>')
     : '';
   const uploadMarkup = config.isActionActive
     ? `
       <div class="styling-upload-row">
         <p class="styling-panel-note">${escapeHtml(config.note)}</p>
         <div class="action-strip production-flow-secondary-actions">
-          <button class="button button-secondary" type="button" data-styling-upload="${escapeAttribute(family)}">Upload Reference</button>
-          <a class="button button-outline" href="/asset-manager">Manage All References</a>
+          <button class="button button-secondary" type="button" data-styling-upload="${escapeAttribute(family)}">Referans Yükle</button>
+          <a class="button button-outline" href="/asset-manager">Tüm Referansları Yönet</a>
         </div>
       </div>
     `
@@ -3788,7 +3947,7 @@ function renderStylingAccordionItem(family, isOpen) {
       <div class="styling-accordion-panel">
         <div class="styling-control-stack">
           <div class="styling-control-group">
-            <span class="styling-control-group-label">Action</span>
+            <span class="styling-control-group-label">Eylem</span>
             <div class="segmented-control segmented-control-wide">
               ${renderStylingOptionButtons(family, 'action', config.actionOptions, config.action, config.actionLabel)}
             </div>
@@ -3811,30 +3970,30 @@ function renderConnectedResultSystem() {
 
   const reviewCards = [
     {
-      label: 'Inputs',
-      value: getInputSourceSummaryValue(),
+      label: 'Hedef Girdiler',
+      value: getSelectedManagedInputSet()?.name || getInputSourceSummaryValue(),
       summary: getSelectedManagedInputSet()
-        ? `${formatDateLabel(getSelectedManagedInputSet().createdAt || '-')} • ${getSelectedManagedInputSet().fileCount || 0} image${Number(getSelectedManagedInputSet().fileCount || 0) === 1 ? '' : 's'}`
-        : 'Select a managed input set to populate previews.',
+        ? `${getSelectedManagedInputSet().fileCount || 0} görsel`
+        : 'Girdi kümesi bekleniyor',
     },
     {
-      label: 'Model',
+      label: 'Model / Konu',
       value: getIdentityModeLabel(state.ui.model.identityMode),
-      summary: summarizeSelectedPills([
+      summary: getCompactModelReviewSummary([
         ...state.ui.model.physicalCorrections,
         ...state.ui.model.aestheticEnhancements,
         ...state.ui.model.constraints,
       ]),
     },
     {
-      label: 'Product',
-      value: getProductIntentLabel(state.ui.productIntent),
-      summary: getProductIntentHelperText(state.ui.productIntent),
+      label: 'Ürün / Giysi',
+      value: getProductLayerSummary(),
+      summary: getCompactProductReviewSummary(),
     },
     {
-      label: 'Styling',
+      label: 'Stil / Aksesuar',
       value: getOverallStylingValue(),
-      summary: getOverallStylingSummary(),
+      summary: getCompactStylingReviewSummary(),
     },
   ];
 
@@ -3891,23 +4050,23 @@ function renderCompileInspectPanel() {
 function renderCompileInspectMeta() {
   const warnings = state.validation?.warnings || [];
   const errors = state.validation?.errors || [];
-  const compileValue = state.lastCompileSucceeded ? 'Compiled' : (state.compileError ? 'Compile failed' : 'Draft preview');
+  const compileValue = state.lastCompileSucceeded ? 'Derlendi' : (state.compileError ? 'Derleme Başarısız' : 'Taslak Önizleme');
   const compileTone = state.lastCompileSucceeded ? 'ok' : (state.compileError ? 'danger' : 'neutral');
   const validationValue = errors.length > 0
-    ? `${errors.length} error${errors.length === 1 ? '' : 's'}`
+    ? `${errors.length} hata`
     : warnings.length > 0
-      ? `${warnings.length} warning${warnings.length === 1 ? '' : 's'}`
-      : 'Clean';
+      ? `${warnings.length} uyarı`
+      : 'Temiz';
   const validationTone = errors.length > 0 ? 'danger' : (warnings.length > 0 ? 'warning' : 'ok');
   const readinessValue = !state.readiness
-    ? 'Dry check pending'
-    : (state.readiness.ready ? 'Dry check ready' : 'Dry check needs review');
+    ? 'Kuru Kontrol Bekliyor'
+    : (state.readiness.ready ? 'Kuru Kontrol Hazır' : 'Kuru Kontrol İncelenmeli');
   const readinessTone = !state.readiness ? 'neutral' : (state.readiness.ready ? 'ok' : 'warning');
 
   return [
-    renderCompileInspectMetaChip('Source', compileValue, compileTone),
-    renderCompileInspectMetaChip('Validation', validationValue, validationTone),
-    renderCompileInspectMetaChip('Dry Check', readinessValue, readinessTone),
+    renderCompileInspectMetaChip('Durum', compileValue, compileTone),
+    renderCompileInspectMetaChip('Doğrulama', validationValue, validationTone),
+    renderCompileInspectMetaChip('Kuru Kontrol', readinessValue, readinessTone),
   ].join('');
 }
 
@@ -3956,6 +4115,13 @@ function buildCompileInspectContext() {
     patternRefs,
     boundAssets,
     authorityEntries,
+    warnings: collectCompileInspectWarnings({
+      job,
+      stylingConfigs,
+      materialRefs,
+      patternRefs,
+      boundAssets,
+    }),
     resolvedRefCount: getCompileInspectResolvedReferenceCount(job, stylingConfigs, materialRefs, patternRefs),
     overrideCount,
   };
@@ -4002,14 +4168,14 @@ function getCompileInspectBoundAssets(job, stylingConfigs, materialRefs, pattern
   };
 
   if (job.entities?.subject?.reference_id) {
-    pushEntry(job.entities.subject.reference_id, 'subject', 'Model', 'Identity authority');
+    pushEntry(job.entities.subject.reference_id, 'subject', 'Model / Konu', 'Kimlik yetkisi');
   }
 
   materialRefs.forEach((assetId) => {
-    pushEntry(assetId, 'garment_material', 'Material Detail', 'Garment fidelity');
+    pushEntry(assetId, 'garment_material', 'Kumaş Detayı', 'Giysi sadakati');
   });
   patternRefs.forEach((assetId) => {
-    pushEntry(assetId, 'garment_pattern', 'Pattern Detail', 'Pattern fidelity');
+    pushEntry(assetId, 'garment_pattern', 'Desen Detayı', 'Desen sadakati');
   });
 
   stylingConfigs.forEach((config) => {
@@ -4035,18 +4201,18 @@ function lookupAssetLibraryEntry(family, assetId) {
 function getCompileInspectAuthorityEntries(job, stylingConfigs, materialRefs, patternRefs) {
   const entries = [
     {
-      label: 'Model',
-      value: job.entities?.subject?.reference_id || 'Target input only',
-      note: job.entities?.subject?.reference_id ? 'Separate identity authority' : 'No separate subject reference',
+      label: 'Model / Konu',
+      value: job.entities?.subject?.reference_id || 'Yalnızca hedef girdi',
+      note: job.entities?.subject?.reference_id ? 'Ayrı kimlik referansı etkin' : 'Ayrı konu referansı yok',
     },
     {
-      label: 'Product',
+      label: 'Ürün / Giysi',
       value: materialRefs.length > 0 || patternRefs.length > 0
-        ? `${materialRefs.length} material • ${patternRefs.length} pattern`
-        : 'Target garment only',
+        ? `${materialRefs.length} kumaş • ${patternRefs.length} desen`
+        : 'Yalnızca hedef giysi',
       note: materialRefs.length > 0 || patternRefs.length > 0
-        ? 'Detail references reinforce garment fidelity'
-        : 'No extra garment detail references',
+        ? 'Detay referansları giysi sadakatini güçlendirir'
+        : 'Ek giysi detay referansı yok',
     },
   ];
 
@@ -4054,16 +4220,16 @@ function getCompileInspectAuthorityEntries(job, stylingConfigs, materialRefs, pa
     if (config.action === 'preserve') {
       entries.push({
         label: config.title,
-        value: 'Target image',
-        note: 'Original slot state preserved',
+        value: 'Hedef görsel',
+        note: 'Özgün slot durumu korunuyor',
       });
       return;
     }
     if (config.action === 'remove') {
       entries.push({
         label: config.title,
-        value: 'Removed',
-        note: 'No authority asset active',
+        value: 'Kaldırıldı',
+        note: 'Etkin yetkili varlık yok',
       });
       return;
     }
@@ -4071,14 +4237,14 @@ function getCompileInspectAuthorityEntries(job, stylingConfigs, materialRefs, pa
       entries.push({
         label: config.title,
         value: config.assetId,
-        note: `${formatEnumLabel(config.action)} authority active`,
+        note: `${typeof config.actionLabel === 'function' ? config.actionLabel(config.action) : formatEnumLabel(config.action)} için referans yetkisi etkin`,
       });
       return;
     }
     if (config.isActionActive) {
       entries.push({
         label: config.title,
-        value: 'System selected',
+        value: 'Sistem seçimi',
         note: getCompileInspectDecisionMeta(config),
       });
     }
@@ -4090,160 +4256,181 @@ function getCompileInspectAuthorityEntries(job, stylingConfigs, materialRefs, pa
 function renderCompileInspectSelectionsTab(context) {
   const selectedSet = getSelectedManagedInputSet();
   const outputMeta = getOutputMeta();
-  const selectionCards = [
+  const authoredRows = [
     {
-      label: 'Target Inputs',
+      label: 'Girdi kümesi',
       value: getInputSourceSummaryValue(),
-      summary: selectedSet
-        ? `${selectedSet.fileCount || 0} image${Number(selectedSet.fileCount || 0) === 1 ? '' : 's'} • ${formatDateLabel(selectedSet.createdAt || '-')}`
-        : 'Using the currently selected input source.',
+      meta: selectedSet
+        ? `${selectedSet.fileCount || 0} görsel • ${formatDateLabel(selectedSet.createdAt || '-')}`
+        : 'Seçili küme kullanılacak.',
     },
     {
-      label: 'Workflow',
+      label: 'Akış',
       value: getWorkflowLabel(state.workflowType),
-      summary: 'Controls which authoring sections stay visible in Production Flow.',
+      meta: 'Üretim ekranındaki etkin yüzeyleri belirler.',
     },
     {
-      label: 'Model',
+      label: 'Model / Konu',
       value: getIdentityModeLabel(state.ui.model.identityMode),
-      summary: summarizeSelectedPills([
+      meta: context.job.entities?.subject?.reference_id || summarizeSelectedPills([
         ...state.ui.model.physicalCorrections,
         ...state.ui.model.aestheticEnhancements,
         ...state.ui.model.constraints,
       ]),
     },
     {
-      label: 'Product',
-      value: getProductIntentLabel(state.ui.productIntent),
-      summary: getProductIntentHelperText(state.ui.productIntent),
+      label: 'Ürün / Giysi',
+      value: getProductLayerSummary(),
+      meta: getProductLayerHelperText(),
     },
     {
-      label: 'Styling',
-      value: getOverallStylingValue(),
-      summary: getOverallStylingSummary(),
-    },
-    {
-      label: 'Output',
+      label: 'Çıktı',
       value: outputMeta.style,
-      summary: `${outputMeta.resolution} • ${outputMeta.aspect}`,
+      meta: `${outputMeta.resolution} • ${outputMeta.aspect}`,
     },
   ];
+  const stylingRows = context.stylingConfigs.map((config) => ({
+    label: config.title,
+    value: getAuthoredStylingSummary(config),
+    meta: getAuthoredStylingMeta(config),
+    badge: typeof config.actionLabel === 'function' ? config.actionLabel(config.action) : formatEnumLabel(config.action),
+    tone: getInspectToneForAction(config.action),
+  }));
 
   return `
     <div class="inspect-card-grid">
-      ${selectionCards.map((item) => `
-        <article class="inspect-card">
-          <span class="inspect-card-label">${escapeHtml(item.label)}</span>
-          <p class="inspect-card-value">${escapeHtml(item.value)}</p>
-          <p class="inspect-card-copy">${escapeHtml(item.summary)}</p>
-        </article>
-      `).join('')}
+      ${renderInspectDataCard('Ana seçimler', authoredRows, 'Ekranda seçilen ana kararlar.')}
+      ${renderInspectDataCard('Stil slotları', stylingRows, 'Aksesuar tarafındaki görünür seçimler.')}
     </div>
   `;
 }
 
 function renderCompileInspectCanonicalTab(context) {
-  const sourceLabel = state.compiledCanonicalJob ? 'Compiled canonical job' : 'Live authored preview';
+  const sourceLabel = state.compiledCanonicalJob ? 'Derlenmiş Kanonik İş' : 'Canlı Taslak Önizleme';
   const sourceTone = state.compiledCanonicalJob ? 'ok' : 'neutral';
   const sourceCopy = state.compiledCanonicalJob
-    ? 'Showing the latest compiled canonical job returned by the backend.'
-    : 'Compile to confirm the fully resolved canonical job. Until then this is the authored Production Flow state.';
+    ? 'Sunucudan dönen son kanonik durum.'
+    : 'Derleme yapılana kadar yaşayan taslak kanonik görünüm.';
+  const entityRows = [
+    {
+      label: 'Konu',
+      value: context.job.entities?.subject?.mode || 'preserve',
+      meta: context.job.entities?.subject?.reference_id || 'Ek konu referansı yok',
+    },
+    {
+      label: 'Giysi',
+      value: context.job.entities?.garment?.mode || 'preserve',
+      meta: `${context.materialRefs.length} kumaş • ${context.patternRefs.length} desen`,
+    },
+    {
+      label: 'Ayakkabı',
+      value: summarizeCanonicalSourcePlacement(
+        context.job.entities?.footwear?.source,
+        context.job.entities?.footwear?.placement,
+        context.job.entities?.footwear?.asset_id
+      ),
+      meta: context.job.entities?.footwear?.mode || 'preserve',
+    },
+    {
+      label: 'Başlık',
+      value: summarizeCanonicalSourcePlacement(
+        context.job.entities?.headwear?.source,
+        context.job.entities?.headwear?.placement,
+        context.job.entities?.headwear?.asset_id
+      ),
+      meta: context.job.entities?.headwear?.mode || 'preserve',
+    },
+  ];
+  const accessoryItems = Array.isArray(context.job.entities?.accessory?.items)
+    ? context.job.entities.accessory.items
+    : [];
+  const accessoryRows = accessoryItems.map((item) => ({
+    label: getAccessoryFamilyLabel(item?.family || 'accessory'),
+    value: summarizeCanonicalSourcePlacement(item?.source, item?.placement, item?.asset_id),
+    meta: item?.mode || 'preserve',
+  }));
+  const envelopeRows = [
+    {
+      label: 'Akış tipi',
+      value: context.job.workflow || state.workflowType,
+      meta: state.compiledCanonicalJob ? 'Sunucu derlemesi' : 'Yerel taslak',
+      badge: sourceLabel,
+      tone: sourceTone,
+    },
+    {
+      label: 'Girdi kümesi',
+      value: context.job.input?.source || 'batch_input',
+      meta: getInputSourceSummaryValue(),
+    },
+    {
+      label: 'Konu referansı',
+      value: context.job.entities?.subject?.reference_id || 'Yok',
+      meta: Array.isArray(context.job.entities?.subject?.reference_ids) && context.job.entities.subject.reference_ids.length > 0
+        ? `${context.job.entities.subject.reference_ids.length} ek kayıt`
+        : 'Tekil konu kaydı',
+    },
+  ];
 
   return `
-    <div class="inspect-json-shell">
-      <div class="inspect-json-meta">
-        ${renderInspectBadge(sourceLabel, sourceTone)}
-        <p class="inspect-json-copy">${escapeHtml(sourceCopy)}</p>
+    <div class="inspect-section-stack">
+      <div class="inspect-card-grid">
+        ${renderInspectDataCard('Kanonik zarf', envelopeRows, sourceCopy)}
+        ${renderInspectDataCard('Varlık durumu', entityRows, 'Kanonik işteki etkin varlık alanları.')}
+        ${renderInspectDataCard('Aksesuar öğeleri', accessoryRows, 'Öğe bazlı aksesuar yapısı.', 'Kanonik işte ek aksesuar öğesi yok.')}
       </div>
-      <pre class="inspect-json-block"><code>${escapeHtml(JSON.stringify(context.job, null, 2))}</code></pre>
+      <article class="inspect-json-shell">
+        <div class="inspect-json-meta">
+          ${renderInspectBadge(sourceLabel, sourceTone)}
+          <p class="inspect-json-copy">${escapeHtml(sourceCopy)}</p>
+        </div>
+        <details class="inspect-json-details">
+          <summary class="inspect-raw-toggle">Ham JSON</summary>
+          <pre class="inspect-json-block"><code>${escapeHtml(JSON.stringify(context.job, null, 2))}</code></pre>
+        </details>
+      </article>
     </div>
   `;
 }
 
 function renderCompileInspectSummaryTab(context) {
   const entityEntries = getCompileInspectEntityEntries(context);
-  const decisionEntries = context.stylingConfigs.map((config) => ({
-    label: config.title,
-    mode: formatEnumLabel(config.action),
-    tone: getInspectToneForAction(config.action),
-    meta: getCompileInspectDecisionMeta(config),
-  }));
   const statusEntries = getCompileInspectStatusEntries(context);
 
   return `
     <div class="inspect-summary-grid">
-      <article class="inspect-summary-card">
-        <div class="inspect-card-heading">
-          <h4>Active Entities</h4>
-          <p>Quick scan of what is participating in the current run.</p>
-        </div>
-        <div class="inspect-list">
-          ${entityEntries.map((entry) => `
-            <div class="inspect-row">
-              <div class="inspect-row-copy">
-                <span class="inspect-row-label">${escapeHtml(entry.label)}</span>
-                <p class="inspect-row-meta">${escapeHtml(entry.note)}</p>
-              </div>
-              ${renderInspectBadge(entry.state, entry.tone)}
-            </div>
-          `).join('')}
-        </div>
-      </article>
-
-      <article class="inspect-summary-card">
-        <div class="inspect-card-heading">
-          <h4>Mode + Source / Placement</h4>
-          <p>Compact slot decisions, grouped so preserve and override behavior read clearly.</p>
-        </div>
-        <div class="inspect-list">
-          ${decisionEntries.map((entry) => `
-            <div class="inspect-row">
-              <div class="inspect-row-copy">
-                <span class="inspect-row-label">${escapeHtml(entry.label)}</span>
-                <p class="inspect-row-meta">${escapeHtml(entry.meta)}</p>
-              </div>
-              ${renderInspectBadge(entry.mode, entry.tone)}
-            </div>
-          `).join('')}
-        </div>
-      </article>
+      ${renderInspectSummaryCard('Etkin yorum', entityEntries, 'Derlemenin gerçekten etkin saydığı katmanlar.')}
 
       <article class="inspect-summary-card inspect-summary-card-authority">
         <div class="inspect-card-heading">
-          <h4>Reference Authority + Bound Assets</h4>
-          <p>Where authority comes from, paired with the compact asset list that is actually in play.</p>
+          <h4>Yetki ve bağlar</h4>
+          <p>Yetkili yol, bağlı varlık ve koru durumu birlikte okunur.</p>
         </div>
         <div class="inspect-authority-grid">
           <section class="inspect-subsection">
-            <p class="inspect-subsection-label">Reference Authority</p>
-            <div class="inspect-list">
-              ${context.authorityEntries.map((entry) => `
-                <div class="inspect-row inspect-row-compact">
-                  <div class="inspect-row-copy">
-                    <span class="inspect-row-label">${escapeHtml(entry.label)}</span>
-                    <p class="inspect-row-meta">${escapeHtml(entry.note)}</p>
-                  </div>
-                  <span class="inspect-inline-value">${escapeHtml(entry.value)}</span>
-                </div>
-              `).join('')}
+            <p class="inspect-subsection-label">Yetkili referans</p>
+            <div class="inspect-kv-list">
+              ${context.authorityEntries.map((entry) => renderInspectKeyValueRow({
+                label: entry.label,
+                value: entry.value,
+                meta: entry.note,
+              })).join('')}
             </div>
           </section>
-
           <section class="inspect-subsection">
-            <p class="inspect-subsection-label">Bound Assets</p>
+            <p class="inspect-subsection-label">Bağlı varlıklar</p>
             ${context.boundAssets.length > 0 ? `
               <div class="inspect-asset-list">
-                ${context.boundAssets.map((asset) => renderCompileInspectAssetRow(asset)).join('')}
+                ${context.boundAssets.slice(0, 5).map((asset) => renderCompileInspectAssetRow(asset)).join('')}
               </div>
-            ` : '<div class="inspect-empty-state">No external assets are bound for the current authored state.</div>'}
+            ` : '<div class="inspect-empty-state">Etkin bağlı varlık yok.</div>'}
           </section>
         </div>
       </article>
 
       <article class="inspect-summary-card inspect-summary-card-status">
         <div class="inspect-card-heading">
-          <h4>Compile Notes / Status</h4>
-          <p>Short technical checks designed for quick confidence, not a raw developer console.</p>
+          <h4>Durum ve uyarılar</h4>
+          <p>Önemli sinyaller ve gerçekten etkili uyarılar.</p>
         </div>
         <div class="inspect-status-list">
           ${statusEntries.map((entry) => `
@@ -4256,6 +4443,7 @@ function renderCompileInspectSummaryTab(context) {
             </div>
           `).join('')}
         </div>
+        ${renderCompileInspectWarnings(context.warnings)}
       </article>
     </div>
   `;
@@ -4264,22 +4452,45 @@ function renderCompileInspectSummaryTab(context) {
 function renderCompileInspectReferencesTab(context) {
   const refs = state.readiness?.resolvedRefSummary || null;
   const resolvedCards = [
-    ['Resolved refs', String(context.resolvedRefCount)],
-    ['Authority entries', String(context.authorityEntries.length)],
-    ['Bound assets', String(context.boundAssets.length)],
+    ['Çözülen referans', String(context.resolvedRefCount)],
+    ['Yetkili kayıt', String(context.authorityEntries.length)],
+    ['Bağlı varlık', String(context.boundAssets.length)],
   ];
 
   if (refs) {
-    resolvedCards.push(['Dry-check subject refs', String(refs.subject || 0)]);
-    resolvedCards.push(['Dry-check accessory refs', String(refs.accessoryFiles || 0)]);
+    resolvedCards.push(['Konu referansı', String(refs.subject || 0)]);
+    resolvedCards.push(['Aksesuar referansı', String(refs.accessoryFiles || 0)]);
   }
+  const referenceRows = [
+    {
+      label: 'Hedef görüntü',
+      value: 'Ana kaynak',
+      meta: getInputSourceSummaryValue(),
+    },
+    {
+      label: 'Model / Konu',
+      value: context.job.entities?.subject?.reference_id ? 'Yetkili referans' : 'Ek referans yok',
+      meta: context.job.entities?.subject?.reference_id || 'Hedef konu kullanılıyor',
+    },
+    {
+      label: 'Ürün / Giysi',
+      value: context.materialRefs.length > 0 || context.patternRefs.length > 0 ? 'Sadakat referansı' : 'Ek referans yok',
+      meta: `${context.materialRefs.length} kumaş • ${context.patternRefs.length} desen`,
+    },
+    ...context.stylingConfigs.map((config) => ({
+      label: config.title,
+      value: getCompileInspectReferenceRole(config),
+      meta: config.assetId || getCompileInspectDecisionMeta(config),
+    })),
+  ];
 
   return `
     <div class="inspect-reference-grid">
+      ${renderInspectDataCard('Referans rolleri', referenceRows, 'Bağlı, yetkili ve eksik referans ayrımı.')}
       <article class="inspect-card">
         <div class="inspect-card-heading">
-          <h4>Reference Counts</h4>
-          <p>Resolved or inferred counts available from the current compile and dry-check state.</p>
+          <h4>Referans sayıları</h4>
+          <p>Kompakt çözüm ve bağ sayıları.</p>
         </div>
         <div class="inspect-mini-stats">
           ${resolvedCards.map(([label, value]) => `
@@ -4290,78 +4501,198 @@ function renderCompileInspectReferencesTab(context) {
           `).join('')}
         </div>
       </article>
-
       <article class="inspect-card">
         <div class="inspect-card-heading">
-          <h4>Authority Map</h4>
-          <p>Preserve states stay loyal to the target image. Override modes are the only ones that activate uploaded authority.</p>
-        </div>
-        <div class="inspect-list">
-          ${context.authorityEntries.map((entry) => `
-            <div class="inspect-row inspect-row-compact">
-              <div class="inspect-row-copy">
-                <span class="inspect-row-label">${escapeHtml(entry.label)}</span>
-                <p class="inspect-row-meta">${escapeHtml(entry.note)}</p>
-              </div>
-              <span class="inspect-inline-value">${escapeHtml(entry.value)}</span>
-            </div>
-          `).join('')}
-        </div>
-      </article>
-
-      <article class="inspect-card">
-        <div class="inspect-card-heading">
-          <h4>Assets In Play</h4>
-          <p>Compact preview of the bound files currently influencing compile behavior.</p>
+          <h4>Bağlı dosyalar</h4>
+          <p>Çalışmayı etkileyen harici görseller.</p>
         </div>
         ${context.boundAssets.length > 0 ? `
           <div class="inspect-asset-list">
             ${context.boundAssets.map((asset) => renderCompileInspectAssetRow(asset)).join('')}
           </div>
-        ` : '<div class="inspect-empty-state">No external reference assets are active right now.</div>'}
+        ` : '<div class="inspect-empty-state">Etkin harici referans yok.</div>'}
       </article>
     </div>
   `;
 }
 
+function renderInspectDataCard(title, rows, copy, emptyText = 'Gösterilecek bilgi yok.') {
+  return `
+    <article class="inspect-card">
+      <div class="inspect-card-heading">
+        <h4>${escapeHtml(title)}</h4>
+        <p>${escapeHtml(copy)}</p>
+      </div>
+      ${rows.length > 0
+        ? `<div class="inspect-kv-list">${rows.map((row) => renderInspectKeyValueRow(row)).join('')}</div>`
+        : `<div class="inspect-empty-state">${escapeHtml(emptyText)}</div>`}
+    </article>
+  `;
+}
+
+function renderInspectKeyValueRow(row) {
+  return `
+    <div class="inspect-kv-row">
+      <div class="inspect-row-copy">
+        <span class="inspect-row-label">${escapeHtml(row.label)}</span>
+        ${row.meta ? `<p class="inspect-row-meta">${escapeHtml(row.meta)}</p>` : ''}
+      </div>
+      <div class="inspect-kv-value${row.badge && row.value ? ' is-stacked' : ''}">
+        ${row.badge ? renderInspectBadge(row.badge, row.tone || 'neutral') : ''}
+        ${row.value ? `<span class="inspect-inline-value">${escapeHtml(row.value)}</span>` : (row.badge ? '' : '<span class="inspect-inline-value">-</span>')}
+      </div>
+    </div>
+  `;
+}
+
+function renderInspectSummaryCard(title, rows, copy) {
+  return `
+    <article class="inspect-summary-card">
+      <div class="inspect-card-heading">
+        <h4>${escapeHtml(title)}</h4>
+        <p>${escapeHtml(copy)}</p>
+      </div>
+      <div class="inspect-list">
+        ${rows.map((entry) => `
+          <div class="inspect-row">
+            <div class="inspect-row-copy">
+              <span class="inspect-row-label">${escapeHtml(entry.label)}</span>
+              <p class="inspect-row-meta">${escapeHtml(entry.note)}</p>
+            </div>
+            ${renderInspectBadge(entry.state, entry.tone)}
+          </div>
+        `).join('')}
+      </div>
+    </article>
+  `;
+}
+
+function renderCompileInspectWarnings(warnings) {
+  if (!warnings.length) {
+    return `
+      <div class="inspect-warning-list">
+        <div class="inspect-warning-item is-ok">
+          <span class="inspect-warning-dot is-ok"></span>
+          <span>Öne çıkan ek uyarı yok.</span>
+        </div>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="inspect-warning-list">
+      ${warnings.map((warning) => `
+        <div class="inspect-warning-item is-${escapeAttribute(warning.tone)}">
+          <span class="inspect-warning-dot is-${escapeAttribute(warning.tone)}"></span>
+          <span>${escapeHtml(warning.text)}</span>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+function getAuthoredStylingSummary(config) {
+  const parts = [typeof config.actionLabel === 'function' ? config.actionLabel(config.action) : formatEnumLabel(config.action)];
+  if (config.isActionActive && config.source) {
+    parts.push(getShortSourceLabel(config.source));
+  }
+  if (config.isActionActive && config.placement) {
+    parts.push(getPlacementLabel(config.placement));
+  }
+  return parts.join(' • ');
+}
+
+function getAuthoredStylingMeta(config) {
+  if (config.assetId) {
+    return config.assetId;
+  }
+  if (config.action === 'preserve') {
+    return 'Hedef görsel kullanılır';
+  }
+  return getCompileInspectDecisionMeta(config);
+}
+
+function summarizeCanonicalSourcePlacement(source, placement, assetId) {
+  const parts = [];
+  if (source) {
+    parts.push(getSourceLabel(source));
+  }
+  if (placement) {
+    parts.push(getPlacementLabel(placement));
+  }
+  if (assetId) {
+    parts.push(assetId);
+  }
+  return parts.length > 0 ? parts.join(' • ') : 'Yok';
+}
+
+function getCompileInspectReferenceRole(config) {
+  if (config.action === 'remove') {
+    return 'Kaldırılıyor';
+  }
+  if (config.action === 'preserve') {
+    return config.assetId ? 'Bağlı ama pasif' : 'Hedef görsel';
+  }
+  if (config.usesReference && config.assetId) {
+    return 'Yetkili referans';
+  }
+  if (config.isActionActive && config.source === 'reference' && !config.assetId) {
+    return 'Referans eksik';
+  }
+  if (config.assetId) {
+    return 'Bağlı ama pasif';
+  }
+  return config.source === 'system' ? 'Sistem yolu' : 'Beklemede';
+}
+
 function getCompileInspectEntityEntries(context) {
   return [
     {
-      label: 'Model',
-      state: 'Active',
+      label: 'Model / Konu',
+      state: 'Etkin',
       tone: state.ui.model.identityMode === 'replace' ? 'accent' : 'neutral',
       note: `${getIdentityModeLabel(state.ui.model.identityMode)}${context.job.entities?.subject?.reference_id ? ` • ${context.job.entities.subject.reference_id}` : ''}`,
     },
     {
-      label: 'Product',
-      state: 'Active',
+      label: 'Ürün / Giysi',
+      state: 'Etkin',
       tone: state.ui.productIntent === 'restyle' ? 'warning' : 'neutral',
-      note: `${getProductIntentLabel(state.ui.productIntent)} • ${context.job.entities?.garment?.mode || 'preserve'}`,
+      note: `${getProductIntentLabel(state.ui.productIntent)} • ${getGarmentModeLabel(context.job.entities?.garment?.mode)}`,
     },
     ...context.stylingConfigs.map((config) => ({
       label: config.title,
-      state: config.action === 'remove' ? 'Removed' : (config.action === 'preserve' ? 'Preserved' : 'Active'),
+      state: config.action === 'remove' ? 'Kaldırıldı' : (config.action === 'preserve' ? 'Korunuyor' : 'Etkin'),
       tone: config.action === 'remove' ? 'danger' : (config.action === 'preserve' ? 'neutral' : 'accent'),
-      note: formatEnumLabel(config.action),
+      note: typeof config.actionLabel === 'function' ? config.actionLabel(config.action) : formatEnumLabel(config.action),
     })),
   ];
 }
 
+function getGarmentModeLabel(mode) {
+  if (mode === 'restyle') {
+    return 'Yeniden Yorumla';
+  }
+  if (mode === 'ignore') {
+    return 'Yok Say';
+  }
+  return 'Koru';
+}
+
 function getCompileInspectDecisionMeta(config) {
   if (config.action === 'preserve') {
-    return 'Target image loyalty only. Uploaded authority stays inactive.';
+    return 'Hedef görsel sadakati';
   }
   if (config.action === 'remove') {
-    return 'Removed from the result. No source or placement authority is active.';
+    return 'Slot sonuçtan kaldırılır';
   }
 
   const parts = [
-    config.source === 'reference' ? 'Reference authority' : 'System selected',
+    config.source === 'reference' ? 'Referans yetkisi' : 'Sistem seçimi',
   ];
   if (config.placement && config.placement !== 'auto') {
     parts.push(getPlacementLabel(config.placement));
   } else if (config.placementOptions.length > 1) {
-    parts.push('Auto placement');
+    parts.push('Otomatik yerleşim');
   }
   return parts.join(' • ');
 }
@@ -4376,38 +4707,102 @@ function getCompileInspectStatusEntries(context) {
 
   return [
     {
-      label: 'Resolved references',
+      label: 'Derleme',
+      copy: state.lastCompileSucceeded
+        ? 'Son derleme tamamlandı.'
+        : state.compileError
+          ? 'Son derleme başarısız.'
+          : 'Henüz derlenmedi.',
+      tone: state.lastCompileSucceeded ? 'ok' : (state.compileError ? 'danger' : 'neutral'),
+    },
+    {
+      label: 'Kuru kontrol',
+      copy: !state.readiness
+        ? 'Henüz çalıştırılmadı.'
+        : state.readiness.ready
+          ? 'Çalıştırmaya hazır.'
+          : 'İnceleme gerekiyor.',
+      tone: !state.readiness ? 'neutral' : (state.readiness.ready ? 'ok' : 'warning'),
+    },
+    {
+      label: 'Referans çözümü',
       copy: context.resolvedRefCount > 0
-        ? `${context.resolvedRefCount} reference${context.resolvedRefCount === 1 ? '' : 's'} resolved or staged for this run.`
-        : 'No external references resolved yet. Compile and dry check to confirm the final set.',
+        ? `${context.resolvedRefCount} referans çözüldü.`
+        : 'Etkin referans çözümü yok.',
       tone: context.resolvedRefCount > 0 ? 'ok' : 'neutral',
     },
     {
-      label: 'Conflicts',
+      label: 'Çakışma durumu',
       copy: conflictErrors > 0
-        ? `${conflictErrors} blocking issue${conflictErrors === 1 ? '' : 's'} detected across compile and dry check.`
+        ? `${conflictErrors} engelleyici sorun var.`
         : conflictWarnings > 0
-          ? `${conflictWarnings} warning${conflictWarnings === 1 ? '' : 's'} detected.`
-          : 'No conflicts detected.',
+          ? `${conflictWarnings} uyarı izlenmeli.`
+          : context.overrideCount > 0
+            ? `${context.overrideCount} aktif geçersiz kılma yolu var.`
+            : 'Koru / sistem yolu baskın.',
       tone: conflictErrors > 0 ? 'danger' : (conflictWarnings > 0 ? 'warning' : 'ok'),
     },
-    {
-      label: 'Override rules',
-      copy: context.overrideCount > 0
-        ? `${context.overrideCount} explicit override rule${context.overrideCount === 1 ? '' : 's'} applied.`
-        : 'Current authored state stays loyal to the original target image.',
-      tone: context.overrideCount > 0 ? 'accent' : 'neutral',
-    },
-    {
-      label: 'Prompt assembly',
-      copy: state.lastCompileSucceeded
-        ? 'Prompt assembly ready.'
-        : state.compileError
-          ? 'Compile failed before prompt assembly was completed.'
-          : 'Compile to confirm the final prompt assembly.',
-      tone: state.lastCompileSucceeded ? 'ok' : (state.compileError ? 'danger' : 'neutral'),
-    },
   ];
+}
+
+function collectCompileInspectWarnings(context) {
+  const warnings = [];
+  const pushWarning = (text, tone = 'warning') => {
+    if (!text || warnings.some((item) => item.text === text)) {
+      return;
+    }
+    warnings.push({ text, tone });
+  };
+
+  if (state.ui.model.identityMode === 'replace' && !context.job.entities?.subject?.reference_id) {
+    pushWarning('Model / Konu için değiştirme açık ama bağlı referans yok.', 'danger');
+  }
+
+  if (context.job.entities?.subject?.mode === 'ignore') {
+    pushWarning('Eski "ignore" değeri konu tarafında koru olarak ele alınıyor.', 'neutral');
+  }
+
+  context.stylingConfigs.forEach((config) => {
+    const rawEntity = getCompileInspectStylingEntity(context.job, config.family);
+    const rawMode = rawEntity?.mode || '';
+    const rawSource = rawEntity?.source || '';
+    const rawPlacement = rawEntity?.placement;
+    const normalizedPlacement = normalizePlacementValue(config.family, rawPlacement);
+
+    if (rawMode === 'ignore') {
+      pushWarning(`${config.title}: eski "ignore" değeri koru olarak ele alınıyor.`, 'neutral');
+    }
+    if (config.action === 'preserve' && config.assetId) {
+      pushWarning(`${config.title}: referans var ama koru kipinde yetkili değil.`);
+    }
+    if (['add', 'replace'].includes(config.action) && config.source === 'reference' && !config.assetId) {
+      pushWarning(`${config.title}: referans kaynağı seçili ama bağlı varlık yok.`, 'danger');
+    }
+    if (config.isActionActive && config.source === 'system' && config.assetId) {
+      pushWarning(`${config.title}: bağlı varlık seçili ancak kaynak sistemde kaldı.`);
+    }
+    if (rawSource === 'reference' && config.source === 'system') {
+      pushWarning(`${config.title}: geçersiz kılma koşulu oluşmadığı için kaynak sisteme çekildi.`);
+    }
+    if (rawPlacement && rawPlacement !== normalizedPlacement) {
+      pushWarning(`${config.title}: yerleşim ${getPlacementLabel(normalizedPlacement)} olarak kullanıldı.`, 'neutral');
+    }
+  });
+
+  return warnings.slice(0, 5);
+}
+
+function getCompileInspectStylingEntity(job, family) {
+  if (family === 'footwear') {
+    return job.entities?.footwear || null;
+  }
+  if (family === 'headwear') {
+    return job.entities?.headwear || null;
+  }
+  const accessoryItems = Array.isArray(job.entities?.accessory?.items)
+    ? job.entities.accessory.items
+    : [];
+  return accessoryItems.find((item) => item?.family === family) || null;
 }
 
 function renderCompileInspectAssetRow(asset) {
@@ -4446,7 +4841,7 @@ function renderVariationStrip() {
   }
   const candidates = buildVariationCandidates();
   if (candidates.length === 0) {
-    elements.variationStrip.innerHTML = '<div class="styling-empty-strip">Variation candidates will appear after you select an input set.</div>';
+    elements.variationStrip.innerHTML = '<div class="styling-empty-strip">Bir girdi kümesi seçtiğinizde varyasyonlar burada görünür.</div>';
     return;
   }
 
@@ -4461,13 +4856,13 @@ function renderVariationStrip() {
         <div class="variation-thumb">
           ${candidate.outputUrl
             ? `<img src="${escapeAttribute(candidate.outputUrl)}" alt="${escapeAttribute(candidate.title)}" loading="lazy" />`
-            : '<div class="hero-preview-empty">No preview</div>'}
+            : '<div class="hero-preview-empty">Önizleme yok</div>'}
         </div>
         <div>
           <p class="variation-card-title">${escapeHtml(candidate.title)}</p>
           <p class="variation-card-meta">${escapeHtml(candidate.meta)}</p>
         </div>
-        ${candidate.key === state.ui.results.approvedVariationKey ? '<span class="variation-card-badge">Approved</span>' : ''}
+        ${candidate.key === state.ui.results.approvedVariationKey ? '<span class="variation-card-badge">Onaylandı</span>' : ''}
       </button>
     `)
     .join('');
@@ -4488,7 +4883,7 @@ function renderHeroPreview() {
 
   if (!active) {
     if (elements.heroPreviewLabel) {
-      elements.heroPreviewLabel.textContent = 'Variation 01';
+      elements.heroPreviewLabel.textContent = 'Varyasyon 01';
     }
     elements.heroBeforeImage.hidden = true;
     elements.heroBeforeImage.src = '';
@@ -4505,7 +4900,7 @@ function renderHeroPreview() {
 
   if (active.inputUrl) {
     elements.heroBeforeImage.src = active.inputUrl;
-    elements.heroBeforeImage.alt = active.inputName || 'Before preview';
+    elements.heroBeforeImage.alt = active.inputName || 'Önce önizlemesi';
     elements.heroBeforeImage.hidden = false;
     elements.heroBeforeEmpty.hidden = true;
   } else {
@@ -4533,9 +4928,9 @@ function renderOutputMeta() {
 
   const meta = getOutputMeta();
   elements.outputMeta.innerHTML = [
-    ['Style', meta.style],
-    ['Resolution', meta.resolution],
-    ['Aspect', meta.aspect],
+    ['Stil', meta.style],
+    ['Çözünürlük', meta.resolution],
+    ['Oran', meta.aspect],
   ]
     .map(([label, value]) => `
       <div class="output-meta-item">
@@ -4667,11 +5062,11 @@ function buildVariationCandidates() {
   }
 
   const descriptors = [
-    ['Catalog Balance', 'Neutral cleanup'],
-    ['Studio Precision', 'Sharper detail'],
-    ['Soft Polish', 'Gentle finish'],
-    ['Editorial Lean', 'Mood-led framing'],
-    ['Detail Safe', 'Texture protected'],
+    ['Katalog Dengesi', 'Nötr temizlik'],
+    ['Stüdyo Netliği', 'Daha keskin detay'],
+    ['Yumuşak Rötuş', 'Nazik bitiriş'],
+    ['Editoryal Yön', 'Atmosfere yakın kadraj'],
+    ['Detay Koruma', 'Doku korunur'],
   ];
   const count = Math.min(5, Math.max(3, seedImages.length));
 
@@ -4715,68 +5110,68 @@ function getOutputMeta() {
 
 function getModelPillDefinitions() {
   return {
-    physicalCorrections: ['Face Balance', 'Light Cleanup', 'Posture Settle'],
-    aestheticEnhancements: ['Catalog Polish', 'Natural Contrast', 'Texture Lift'],
-    constraints: ['Keep Pose', 'Respect Garment', 'Preserve Hands'],
+    physicalCorrections: ['Yüz Dengesi', 'Hafif Temizlik', 'Duruş Dengeleme'],
+    aestheticEnhancements: ['Katalog Cilası', 'Doğal Kontrast', 'Doku Koruma'],
+    constraints: ['Pozu Koru', 'Ürünü Koru', 'Elleri Koru'],
   };
 }
 
 function getIdentityModeLabel(mode) {
   if (mode === 'replace') {
-    return 'Replace';
+    return 'Değiştir';
   }
   if (mode === 'ignore') {
-    return 'Ignore';
+    return 'Yok Say';
   }
-  return 'Preserve';
+  return 'Koru';
 }
 
 function getIdentityModeHelperText(mode) {
   if (mode === 'replace') {
-    return 'Stage a reference face in the UI shell and keep the rest of the model controls stable.';
+    return 'Konu referansını yükleyin; sistem kimliği bu görsele göre ele alsın.';
   }
   if (mode === 'ignore') {
-    return 'Leave identity unmanaged so the rest of the flow can stay focused on cleanup and styling.';
+    return 'Konu kimliğini devre dışı bırakın; akış ürün ve stil kararlarına odaklansın.';
   }
-  return 'Keep the current face identity anchored to the selected input set.';
+  return 'Konu kimliğini seçili hedef girdiye bağlı tutun.';
 }
 
 function getProductIntentLabel(intent) {
   if (intent === 'restyle') {
-    return 'Restyle';
+    return 'Yeniden Yorumla';
   }
   if (intent === 'preserve') {
-    return 'Preserve';
+    return 'Koru';
   }
-  return 'Clean';
+  return 'Temizle';
 }
 
 function getProductIntentHelperText(intent) {
   if (intent === 'restyle') {
-    return 'Restyle the garment presentation while still using the current input set as the base.';
+    return 'Giysiyi kaynak görüntüyü temel alarak kontrollü biçimde yeniden yorumla.';
   }
   if (intent === 'preserve') {
-    return 'Preserve the garment as captured and keep the edit focused on truth-to-source output.';
+    return 'Ürünü kaynak görsele sadık tut; düzenleme ürün doğruluğunu korusun.';
   }
-  return 'Clean the garment presentation into a studio-ready base without visually restyling it.';
+  return 'Ürün sunumunu temizle; görünümü yeniden tasarlamadan daha düzenli bir taban üret.';
 }
 
 function getShortSourceLabel(value) {
-  return value === 'reference' ? 'Reference' : 'System';
+  return value === 'reference' ? 'Referans' : 'Sistem';
 }
 
 function getOverallStylingValue() {
   const activeFamilies = getVisibleStylingStateList().filter((item) => item.isActionActive);
   if (activeFamilies.length === 0) {
-    return 'No active changes';
+    return 'Aktif değişiklik yok';
   }
-  return `${activeFamilies.length} active decision${activeFamilies.length === 1 ? '' : 's'}`;
+  return `${activeFamilies.length} aktif karar`;
 }
 
 function getOverallStylingSummary() {
   const activeFamilies = getVisibleStylingStateList().filter((item) => item.isActionActive);
   if (activeFamilies.length === 0) {
-    return 'Keep original styling.';
+    return 'Mevcut stil korunsun.';
   }
   return activeFamilies.map((item) => `${item.title}: ${item.summary}`).join(' • ');
 }
@@ -4784,26 +5179,40 @@ function getOverallStylingSummary() {
 function buildReviewSentence() {
   const inputLabel = getInputSourceSummaryValue();
   const styleMeta = getOutputMeta();
-  const identityText = getIdentityModeLabel(state.ui.model.identityMode).toLowerCase();
   const productText = getProductIntentLabel(state.ui.productIntent).toLowerCase();
-  const modelPills = summarizeSelectedPills([
-    ...state.ui.model.physicalCorrections,
-    ...state.ui.model.aestheticEnhancements,
-    ...state.ui.model.constraints,
-  ]).toLowerCase();
-  const stylingText = getVisibleStylingStateList()
-    .filter((item) => item.isActionActive)
-    .map((item) => `${item.title.toLowerCase()} ${item.summary.toLowerCase()}`)
-    .join(', ');
+  return `${inputLabel} için ${productText} yaklaşımıyla ${styleMeta.style.toLowerCase()} çıktı hazırlanıyor.`;
+}
 
-  const base = `${inputLabel} as a ${productText} ${styleMeta.style.toLowerCase()} output with ${identityText} identity handling`;
-  const modelClause = modelPills !== 'none selected' ? `, ${modelPills}` : '';
-  const stylingClause = stylingText ? `, and styling changes across ${stylingText}` : '';
-  return `${base}${modelClause}${stylingClause}.`;
+function getCompactModelReviewSummary(values) {
+  const subjectRef = state.job?.entities?.subject?.reference_id;
+  if (state.ui.model.identityMode === 'replace') {
+    return subjectRef ? `Referans bağlı • ${subjectRef}` : 'Referans bekleniyor';
+  }
+  return values.length > 0 ? `${values.length} seçim` : 'Ek seçim yok';
+}
+
+function getCompactProductReviewSummary() {
+  const refs = getGarmentDetailRefs();
+  const parts = ['Ürün bazlı uygulama'];
+  if (refs.material.length > 0) {
+    parts.push(`${refs.material.length} kumaş`);
+  }
+  if (refs.pattern.length > 0) {
+    parts.push(`${refs.pattern.length} desen`);
+  }
+  return parts.join(' • ');
+}
+
+function getCompactStylingReviewSummary() {
+  const activeFamilies = getVisibleStylingStateList().filter((item) => item.isActionActive);
+  if (activeFamilies.length === 0) {
+    return 'Mevcut görünüm korunuyor';
+  }
+  return activeFamilies.map((item) => item.title).join(' • ');
 }
 
 function summarizeSelectedPills(values) {
-  return values.length > 0 ? values.join(' • ') : 'None selected';
+  return values.length > 0 ? values.join(' • ') : 'Seçim yok';
 }
 
 function getVisibleStylingStateList() {
@@ -4850,7 +5259,7 @@ function getStylingPanelConfig(family) {
     const isActionActive = action === 'add' || action === 'replace';
     return {
       family,
-      title: 'Headwear',
+      title: 'Başlık',
       action,
       actionOptions: getHeadwearUiModes(),
       actionLabel: getAccessoryActionLabel,
@@ -4877,7 +5286,7 @@ function getStylingPanelConfig(family) {
   const isActionActive = action === 'replace';
   return {
     family: 'footwear',
-    title: 'Footwear',
+    title: 'Ayakkabı',
     action,
     actionOptions: getFootwearUiModes(),
     actionLabel: getFootwearActionLabel,
@@ -4940,10 +5349,10 @@ function getAssetChoicesForFamily(family) {
 
 function humanizeOutputProfile(profile) {
   if (!profile) {
-    return 'Studio Catalog';
+    return 'Stüdyo Katalog';
   }
   if (profile.includes('catalog')) {
-    return 'Studio Catalog';
+    return 'Stüdyo Katalog';
   }
   return formatEnumLabel(profile);
 }
@@ -4955,7 +5364,7 @@ function inferResolutionFromProfile(profile) {
   if (profile.includes('2k')) {
     return '2K';
   }
-  return 'Default';
+  return 'Varsayılan';
 }
 
 function inferAspectFromProfile(profile) {
@@ -4968,7 +5377,7 @@ function inferAspectFromProfile(profile) {
   if (profile.includes('16x9')) {
     return '16:9';
   }
-  return 'Default';
+  return 'Varsayılan';
 }
 
 function formatEnumLabel(value) {
@@ -5006,7 +5415,7 @@ function formatDateLabel(value) {
 function getInputSourceSummaryValue() {
   const selectedPath = String(elements.inputSource?.value || state.job?.inputSource || '').trim();
   if (!selectedPath) {
-    return 'Not selected';
+    return 'Seçilmedi';
   }
   const managedSet = (state.managedInputSets || []).find((setItem) => String(setItem.path || '').trim() === selectedPath);
   if (managedSet) {
@@ -5021,15 +5430,15 @@ function getInputSourceSummaryValue() {
 
 function getWorkflowLabel(workflow) {
   if (workflow === 'face_identity') {
-    return 'Face & Identity';
+    return 'Yüz ve Kimlik';
   }
   if (workflow === 'styling') {
-    return 'Styling';
+    return 'Stil';
   }
   if (workflow === 'advanced') {
-    return 'Advanced';
+    return 'Gelişmiş';
   }
-  return 'Studio Cleanup';
+  return 'Stüdyo Temizliği';
 }
 
 function getPrimaryAccessoryElements(family) {
@@ -5093,7 +5502,7 @@ function renderPrimaryAccessoryUi(family) {
   }
   if (control.assetHint) {
     control.assetHint.textContent = usesReference && assetOptions.length === 0
-      ? 'No compatible references found.'
+      ? 'Uygun referans bulunamadı.'
       : '';
   }
 }
@@ -5194,77 +5603,77 @@ function getPlacementOptions(kind) {
 
 function getPlacementLabel(value) {
   if (value === 'on_feet') {
-    return 'On feet';
+    return 'Ayakta';
   }
   if (value === 'on_eyes') {
-    return 'On eyes';
+    return 'Gözde';
   }
   if (value === 'on_head') {
-    return 'On head';
+    return 'Başta';
   }
   if (value === 'in_hand') {
-    return 'In hand';
+    return 'Elde';
   }
   if (value === 'on_forearm') {
-    return 'On forearm';
+    return 'Kolda';
   }
   if (value === 'on_shoulder') {
-    return 'On shoulder';
+    return 'Omuzda';
   }
   if (value === 'crossbody') {
-    return 'Crossbody';
+    return 'Çapraz';
   }
-  return 'Auto';
+  return 'Otomatik';
 }
 
 function getSourceLabel(value) {
-  return value === 'reference' ? 'Use reference' : 'Let system choose';
+  return value === 'reference' ? 'Referansı Kullan' : 'Sistem Seçsin';
 }
 
 function getAccessoryActionLabel(mode) {
   if (mode === 'preserve') {
-    return 'Preserve';
+    return 'Koru';
   }
   if (mode === 'add') {
-    return 'Add';
+    return 'Ekle';
   }
   if (mode === 'replace') {
-    return 'Replace';
+    return 'Değiştir';
   }
   if (mode === 'remove') {
-    return 'Remove';
+    return 'Kaldır';
   }
-  return 'Legacy Ignore';
+  return 'Eski Yok Say';
 }
 
 function getFootwearActionLabel(mode) {
   if (mode === 'preserve') {
-    return 'Keep Original';
+    return 'Orijinali Koru';
   }
   if (mode === 'replace') {
-    return 'Replace';
+    return 'Değiştir';
   }
   if (mode === 'remove') {
-    return 'Remove';
+    return 'Kaldır';
   }
-  return 'Ignore';
+  return 'Yok Say';
 }
 
 function getAccessoryActionHint(family, mode) {
   const label = getAccessoryFamilyLabel(family);
   if (mode === 'preserve') {
-    return `${label}: preserve whatever already exists in the original target image, and do not activate uploaded authority.`;
+    return `${label}: hedef görseldeki mevcut durumu koru; yüklenen varlık yetkili hale gelmez.`;
   }
   if (mode === 'add') {
-    return `${label}: add this item with explicit override authority when using a reference source.`;
+    return `${label}: referans kaynağı açıkken bu varlığı yeni ekleme olarak uygula.`;
   }
   if (mode === 'replace') {
-    return `${label}: replace the current item with explicit override authority when using a reference source.`;
+    return `${label}: referans kaynağı açıkken mevcut öğeyi bu varlıkla değiştir.`;
   }
   if (mode === 'remove') {
-    return `${label}: remove this item from the result.`;
+    return `${label}: bu öğeyi sonuçtan kaldır.`;
   }
-  return `${label}: legacy ignore state retained only for compatibility.`;
+  return `${label}: eski yok say durumu yalnızca uyumluluk için tutulur.`;
 }
 
 function summarizeActionSourcePlacement(actionLabel, sourceLabel, placementLabel) {
@@ -5314,15 +5723,15 @@ function getAccessoryFamilies() {
 
 function getAccessoryFamilyLabel(family) {
   if (family === 'eyewear') {
-    return 'Eyewear';
+    return 'Gözlük';
   }
   if (family === 'bag') {
-    return 'Bag';
+    return 'Çanta';
   }
   if (family === 'neckwear') {
-    return 'Neckwear';
+    return 'Boyun Aksesuarı';
   }
-  return family || 'Accessory';
+  return family || 'Aksesuar';
 }
 
 function getAccessoryItemModes() {
@@ -5378,12 +5787,12 @@ function createInitialUiState() {
       identityMode: 'preserve',
       identityReferenceName: '',
       identityPreviewUrl: '',
-      physicalCorrections: ['Face Balance', 'Light Cleanup'],
-      aestheticEnhancements: ['Catalog Polish'],
-      constraints: ['Keep Pose', 'Respect Garment'],
+      physicalCorrections: ['Yüz Dengesi', 'Hafif Temizlik'],
+      aestheticEnhancements: ['Katalog Cilası'],
+      constraints: ['Pozu Koru', 'Ürünü Koru'],
     },
     styling: {
-      openPanel: 'eyewear',
+      openPanel: '',
     },
     inspect: {
       open: true,
