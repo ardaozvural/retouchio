@@ -1,3 +1,38 @@
+function buildConditionalIdentityLines(subject = {}) {
+  if (subject.mode === 'transfer_identity') {
+    return [
+      'Facial identity must follow the uploaded subject reference.',
+      'Preserve the target body, skin continuity, hair continuity, pose direction, framing, garment continuity, and scene structure.',
+    ];
+  }
+
+  return [
+    'Keep the target subject identity unchanged: preserve face, body, skin continuity, and hair continuity as target-led anchors.',
+  ];
+}
+
+function buildConditionalPoseLine(subject = {}) {
+  if (subject.pose_refinement === 'pro') {
+    return 'Allow professional pose refinement while keeping camera angle, body direction, pose class, and framing target-led.';
+  }
+  if (subject.pose_refinement === 'light') {
+    return 'Allow light pose refinement while keeping camera angle, body direction, pose class, and framing target-led.';
+  }
+  return 'Pose correction is limited: preserve camera angle, body orientation, and framing. Only allow minor professional cleanup such as straighter posture, relaxed shoulders, and subtle stance refinement.';
+}
+
+function rewriteCoreRules(coreRules = [], subject = {}) {
+  return coreRules.flatMap((line) => {
+    if (String(line).startsWith('Keep model identity unchanged:')) {
+      return buildConditionalIdentityLines(subject);
+    }
+    if (String(line).startsWith('Pose correction is limited:')) {
+      return [buildConditionalPoseLine(subject)];
+    }
+    return [line];
+  });
+}
+
 module.exports = {
   id: 'core',
   label: 'Core',
@@ -9,15 +44,14 @@ module.exports = {
       return [];
     }
 
+    const subject = job?.entities?.subject || {};
     const lines = [
       'Strict catalog edit. Follow every active entity instruction exactly and suppress creative reinterpretation.',
       'Prioritize realism, product clarity, and commercial usefulness over editorial styling or generative novelty.',
-      'This is the default strict cleanup base for catalog work. It is not a styling preset and it is not a redesign layer.',
-      'Keep all edits physically believable and scoped to the intended entity only.',
       'Treat the canonical job as the behavioral source of truth and obey active reference authority boundaries.',
-      'Accessory behavior is not part of the base layer. Styling additions belong to active entity or preset layers only.',
+      'Keep all edits physically believable and scoped to the intended entity only.',
       'Do not invent optional accessories, props, scene drama, logos, or extra styling not explicitly requested.',
-      ...(context.coreRules?.coreRules || []),
+      ...rewriteCoreRules(context.coreRules?.coreRules || [], subject),
     ];
 
     if ((job?.entities?.accessory?.items || []).length === 0 && job?.entities?.headwear?.mode === 'ignore') {

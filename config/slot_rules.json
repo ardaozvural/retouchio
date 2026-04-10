@@ -1,5 +1,35 @@
 {
   "slots": {
+    "eyewear_sunglasses": {
+      "title": "Eyewear Sunglasses Slot",
+      "refDir": "refs/accessories/eyewear",
+      "referenceBindingText": "Treat the supplied sunglasses reference as the strict visual and product authority for this accessory item. Frame identity, lens geometry, bridge fit, temple structure, finish, tint read, scale, and wear position are locked to the reference with no substitution, no reinterpretation, and no drift.",
+      "rules": [
+        "Interpret this slot as sunglasses eyewear only. Do not convert it into jewelry, visor, mask, headwear, or generic face styling.",
+        "Lock frame silhouette, lens shape, rim thickness, bridge width, temple geometry, finish, tint read, and overall scale to the reference.",
+        "Respect the requested eyewear placement while keeping the product identity locked to the reference.",
+        "Keep the sunglasses seated naturally relative to the eyes, nose bridge, brow line, and ear or temple alignment with believable symmetry and contact.",
+        "Do not distort eye spacing, nose bridge geometry, cheek volume, brow shape, hairline, or face shape to force the eyewear fit.",
+        "Do not float the frames, bury the bridge, clip the temples, mirror the lens geometry incorrectly, or improvise missing frame details.",
+        "Keep eyewear influence local to the eyewear zone only. Do not change subject identity, skin tone, expression, or garment readability.",
+        "Invalid if frame family, lens geometry, bridge fit, temple alignment, finish, scale, or wear position drift from the reference."
+      ]
+    },
+    "bag_hand_bag": {
+      "title": "Bag Hand Bag Slot",
+      "refDir": "refs/accessories/bag",
+      "referenceBindingText": "Treat the supplied handbag references as a strict visual lock for exact bag identity, silhouette, strap or handle architecture, opening structure, finish, and scale with no substitution, no reinterpretation, and no drift.",
+      "rules": [
+        "Interpret this slot as a handbag only. Do not collapse it into luggage, pouch, backpack, clothing detail, or generic accessory mass.",
+        "Lock bag body silhouette, proportions, volume, panel construction, opening logic, handle or strap count, attachment points, drop length, finish, and color family to the reference.",
+        "Respect the requested carry placement and keep gravity, hang direction, strap tension, body contact, and scale physically believable.",
+        "Do not distort arm length, hand size, shoulder line, torso width, or pose balance to make the bag fit.",
+        "Do not let the bag cover critical garment design zones, break silhouette continuity, or compete with the product read.",
+        "Do not invent pockets, hardware, folds, or strap routing not supported by the reference.",
+        "Keep bag influence local to the bag item only. Do not redesign subject identity, pose class, or garment structure.",
+        "Invalid if silhouette, carry logic, strap geometry, scale, finish, or placement drift from the reference."
+      ]
+    },
     "footwear": {
       "title": "Footwear Slot",
       "refDir": "refs/accessories/footwear",

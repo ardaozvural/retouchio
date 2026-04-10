@@ -6,6 +6,7 @@ const FROZEN_TOP_LEVEL_FIELDS = [
   'displayName',
   'inputSource',
   'entities',
+  'meta',
 ];
 
 const FROZEN_ENTITY_NAMES = [
@@ -19,8 +20,12 @@ const FROZEN_ENTITY_NAMES = [
   'global_negative_rules',
 ];
 
+const SUBJECT_MODES = ['preserve', 'transfer_identity'];
+const SUBJECT_SOURCES = ['system', 'reference'];
+const SUBJECT_REFINEMENT_LEVELS = ['preserve', 'light', 'pro'];
+
 const FROZEN_ENTITY_MODE_MAP = {
-  subject: ['preserve', 'ignore'],
+  subject: SUBJECT_MODES,
   garment: ['preserve', 'restyle', 'ignore'],
   footwear: ['preserve', 'replace', 'remove', 'ignore'],
   headwear: ['preserve', 'add', 'replace', 'remove', 'ignore'],
@@ -31,6 +36,7 @@ const FROZEN_ENTITY_MODE_MAP = {
 };
 
 const FROZEN_ACCESSORY_ITEM_MODES = ['preserve', 'add', 'replace', 'remove', 'ignore'];
+const GARMENT_REFINEMENT_LEVELS = ['preserve', 'minimal', 'repair'];
 
 const FROZEN_STABLE_FIELD_NAMES = [
   'version',
@@ -44,9 +50,13 @@ const FROZEN_STABLE_FIELD_NAMES = [
   'placement',
   'asset_id',
   'reference_id',
+  'reference_ids',
   'profile',
   'items',
   'detail_refs',
+  'refinement_level',
+  'face_refinement',
+  'pose_refinement',
 ];
 
 module.exports = {
@@ -55,5 +65,9 @@ module.exports = {
   FROZEN_ENTITY_NAMES,
   FROZEN_ENTITY_MODE_MAP,
   FROZEN_ACCESSORY_ITEM_MODES,
+  GARMENT_REFINEMENT_LEVELS,
+  SUBJECT_MODES,
+  SUBJECT_SOURCES,
+  SUBJECT_REFINEMENT_LEVELS,
   FROZEN_STABLE_FIELD_NAMES,
 };

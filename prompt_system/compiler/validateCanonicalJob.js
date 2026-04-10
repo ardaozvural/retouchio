@@ -10,8 +10,11 @@ const {
   FROZEN_ACCESSORY_ITEM_MODES,
   FROZEN_ENTITY_MODE_MAP,
   FROZEN_ENTITY_NAMES,
+  GARMENT_REFINEMENT_LEVELS,
   FROZEN_SCHEMA_VERSION,
   FROZEN_TOP_LEVEL_FIELDS,
+  SUBJECT_REFINEMENT_LEVELS,
+  SUBJECT_SOURCES,
 } = require('./schemaConstants');
 
 const INTENT_SOURCES = ['system', 'reference'];
@@ -129,8 +132,23 @@ function validateCanonicalJob(job, options = {}) {
   }
 
   const subject = entities.subject || {};
-  if (subject.mode === 'preserve' && !subject.reference_id) {
-    warnings.push('subject.mode is preserve but reference_id is empty.');
+  validateIntentField(errors, 'subject.source', subject.source, SUBJECT_SOURCES);
+  validateIntentField(errors, 'subject.face_refinement', subject.face_refinement, SUBJECT_REFINEMENT_LEVELS);
+  validateIntentField(errors, 'subject.pose_refinement', subject.pose_refinement, SUBJECT_REFINEMENT_LEVELS);
+  if (subject.mode === 'transfer_identity' && !subject.reference_id) {
+    errors.push('subject.reference_id is required when mode is transfer_identity.');
+  }
+  if (subject.source === 'reference' && !subject.reference_id) {
+    errors.push('subject.reference_id is required when source is reference.');
+  }
+  if (subject.source === 'system' && subject.reference_id) {
+    warnings.push('subject.reference_id is set but source is system; normalization should usually promote source to reference.');
+  }
+  if (subject.reference_ids !== undefined && !Array.isArray(subject.reference_ids)) {
+    errors.push('subject.reference_ids must be an array.');
+  }
+  if (Array.isArray(subject.reference_ids) && subject.reference_id && !subject.reference_ids.includes(subject.reference_id)) {
+    warnings.push('subject.reference_id is not present in subject.reference_ids; the primary reference should appear in both fields.');
   }
   if (subject.reference_id) {
     const check = validateAssetIdWithStandard(standard, 'subject', subject.reference_id);
@@ -149,6 +167,7 @@ function validateCanonicalJob(job, options = {}) {
   }
 
   const garment = entities.garment || {};
+  validateIntentField(errors, 'garment.refinement_level', garment.refinement_level, GARMENT_REFINEMENT_LEVELS);
   if (garment.detail_refs && !Array.isArray(garment.detail_refs.material || [])) {
     errors.push('garment.detail_refs.material must be an array.');
   }

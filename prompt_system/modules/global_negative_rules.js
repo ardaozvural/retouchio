@@ -1,16 +1,39 @@
+function rewriteFailRules(failRules = [], subject = {}) {
+  return failRules.flatMap((line) => {
+    if (String(line) === 'The result is invalid if the subject identity changes.') {
+      if (subject.mode === 'transfer_identity') {
+        return ['The result is invalid if facial identity does not follow the uploaded subject reference.'];
+      }
+      return [line];
+    }
+
+    if (String(line) === 'The result is invalid if the model, garment, or pose is redesigned instead of cleaned up.') {
+      if (subject.mode === 'transfer_identity') {
+        return [
+          'The result is invalid if the body, skin continuity, hair continuity, pose class, framing family, garment continuity, or scene continuity are redesigned instead of preserved.',
+        ];
+      }
+      return [line];
+    }
+
+    return [line];
+  });
+}
+
 module.exports = {
   id: 'global_negative_rules',
   label: 'Global Negative Rules',
   supportedModes: ['apply', 'ignore'],
   variants: [],
   ruleGroups: ['fail_rules', 'negative_items'],
-  compile({ entity, context }) {
+  compile({ entity, context, job }) {
     if (!entity || entity.mode === 'ignore') {
       return [];
     }
 
+    const subject = job?.entities?.subject || {};
     const lines = [
-      ...(context.coreRules?.failRules || []),
+      ...rewriteFailRules(context.coreRules?.failRules || [], subject),
       'Do not add extra people, extra limbs, random props, logos, text, or watermarks.',
       'Do not redesign the garment, alter silhouette family, shorten hemline, or change print logic.',
       'Do not create floating items, broken shadows, detached footwear, or impossible ground contact.',

@@ -12,7 +12,7 @@
     "subject": {
       "modes": [
         "preserve",
-        "ignore"
+        "transfer_identity"
       ],
       "variants": [
         "identity_reference"

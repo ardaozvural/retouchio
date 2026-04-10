@@ -41,6 +41,10 @@ function accessoryUsesReference(mode) {
   return mode === 'add' || mode === 'replace';
 }
 
+function subjectUsesReference(entity) {
+  return Boolean(entity && entity.source === 'reference' && entity.reference_id);
+}
+
 function usesReferenceAuthority(entity, predicate) {
   return Boolean(entity && predicate(entity.mode) && entity.source === 'reference' && entity.asset_id);
 }
@@ -56,10 +60,25 @@ function stripReferenceAuthority(entity) {
   };
 }
 
+function stripSubjectReferenceAuthority(entity) {
+  if (!entity) {
+    return entity;
+  }
+  return {
+    ...entity,
+    reference_id: null,
+    reference_ids: [],
+  };
+}
+
 function buildCompilerIntentJob(canonicalJob) {
   const compilerJob = clone(canonicalJob);
   if (!compilerJob?.entities) {
     return compilerJob;
+  }
+
+  if (!subjectUsesReference(compilerJob.entities.subject)) {
+    compilerJob.entities.subject = stripSubjectReferenceAuthority(compilerJob.entities.subject);
   }
 
   if (!usesReferenceAuthority(compilerJob.entities.footwear, footwearUsesReference)) {
@@ -80,6 +99,18 @@ function buildCompilerIntentJob(canonicalJob) {
 }
 
 function formatAccessoryLabel(item) {
+  if (item?.variant === 'sunglasses') {
+    return 'sunglasses';
+  }
+  if (item?.variant === 'hand_bag') {
+    return 'handbag';
+  }
+  if (item?.variant === 'shoulder_bag') {
+    return 'shoulder bag';
+  }
+  if (item?.variant === 'neck_scarf') {
+    return 'neck scarf';
+  }
   if (item?.family === 'eyewear') {
     return 'eyewear';
   }
@@ -123,43 +154,67 @@ function getPlacementIntentLine(family, placement) {
   return '';
 }
 
+function pushIntentSummary(lines, authorityLine, placementLine) {
+  if (authorityLine && placementLine) {
+    lines.push(`${authorityLine} ${placementLine}`);
+    return;
+  }
+  if (authorityLine) {
+    lines.push(authorityLine);
+    return;
+  }
+  if (placementLine) {
+    lines.push(placementLine);
+  }
+}
+
 function buildIntentBindingSection(canonicalJob) {
   const lines = [];
+  const garment = canonicalJob.entities?.garment || {};
   const footwear = canonicalJob.entities?.footwear || {};
   const headwear = canonicalJob.entities?.headwear || {};
   const accessoryItems = Array.isArray(canonicalJob.entities?.accessory?.items) ? canonicalJob.entities.accessory.items : [];
+  const garmentRefinement = garment.refinement_level === 'repair'
+    ? 'repair'
+    : (garment.refinement_level === 'minimal' ? 'minimal' : (garment.mode === 'restyle' ? 'repair' : 'preserve'));
+
+  if (garment.mode !== 'ignore' && garmentRefinement === 'minimal') {
+    lines.push('Keep the garment as the product authority while allowing only minimal product-safe cleanup and polish.');
+  } else if (garment.mode !== 'ignore' && garmentRefinement === 'repair') {
+    lines.push('Keep the garment as the product authority while allowing stronger product-faithful correction without redesign.');
+  }
 
   if (footwear.mode === 'replace') {
-    if (usesReferenceAuthority(footwear, footwearUsesReference)) {
-      lines.push('Use referenced footwear as visual authority for the active footwear result.');
-    }
-    const placementLine = getPlacementIntentLine('footwear', footwear.placement || 'on_feet');
-    if (placementLine) {
-      lines.push(placementLine);
-    }
+    pushIntentSummary(
+      lines,
+      usesReferenceAuthority(footwear, footwearUsesReference)
+        ? 'Footwear: use the referenced product as active authority.'
+        : '',
+      getPlacementIntentLine('footwear', footwear.placement || 'on_feet')
+    );
   }
 
   if (headwear.mode === 'add' || headwear.mode === 'replace') {
-    if (usesReferenceAuthority(headwear, headwearUsesReference)) {
-      lines.push('Use referenced headwear as visual authority for the active headwear result.');
-    }
-    const placementLine = getPlacementIntentLine('headwear', headwear.placement || 'auto');
-    if (placementLine) {
-      lines.push(placementLine);
-    }
+    pushIntentSummary(
+      lines,
+      usesReferenceAuthority(headwear, headwearUsesReference)
+        ? 'Headwear: use the referenced design as active authority.'
+        : '',
+      getPlacementIntentLine('headwear', headwear.placement || 'auto')
+    );
   }
 
   for (const item of accessoryItems) {
     if (!item || (item.mode !== 'add' && item.mode !== 'replace')) {
       continue;
     }
-    if (usesReferenceAuthority(item, accessoryUsesReference)) {
-      lines.push(`Use referenced ${formatAccessoryLabel(item)} as visual authority for that accessory item.`);
-    }
-    const placementLine = getPlacementIntentLine(item.family, item.placement || 'auto');
-    if (placementLine) {
-      lines.push(placementLine);
-    }
+    pushIntentSummary(
+      lines,
+      usesReferenceAuthority(item, accessoryUsesReference)
+        ? `${formatAccessoryLabel(item)}: use the referenced design as active authority.`
+        : '',
+      getPlacementIntentLine(item.family, item.placement || 'auto')
+    );
   }
 
   if (lines.length === 0) {
@@ -174,20 +229,38 @@ function buildIntentBindingSection(canonicalJob) {
 }
 
 function buildReferenceBindingSection(canonicalJob) {
-  const lines = [
-    'Target image = garment, pose class, and framing authority.',
-  ];
+  const subject = canonicalJob.entities?.subject || {};
+  const lines = [];
 
-  if (canonicalJob.entities.subject.reference_ids.length > 0) {
-    lines.push('Subject refs = identity authority for face, proportions, and hair.');
+  if (subject.mode === 'transfer_identity') {
+    lines.push(
+      'Subject reference = facial identity authority.',
+      'Target image = body authority.',
+      'Target image = pose class authority.',
+      'Target image = framing authority.',
+      'Target image = garment authority.',
+      'Target image = scene continuity authority.'
+    );
+  } else {
+    lines.push(
+      'Target image = subject identity authority.',
+      'Target image = body authority.',
+      'Target image = pose class authority.',
+      'Target image = framing authority.',
+      'Target image = garment authority.',
+      'Target image = scene continuity authority.'
+    );
+    if (subjectUsesReference(subject)) {
+      lines.push('Subject references, if present, are supporting-only and not replacement identity authority.');
+    }
   }
 
   if ((canonicalJob.entities.garment.detail_refs?.material || []).length > 0) {
-    lines.push('Garment material refs = material and fabric fidelity authority.');
+    lines.push('Garment material refs = texture, surface, stitching, and close-up detail fidelity authority.');
   }
 
   if ((canonicalJob.entities.garment.detail_refs?.pattern || []).length > 0) {
-    lines.push('Garment pattern refs = pattern geometry, scale, and density authority.');
+    lines.push('Garment pattern refs = pattern, print, writing, geometry, scale, and placement authority.');
   }
 
   if (usesReferenceAuthority(canonicalJob.entities.footwear, footwearUsesReference)) {
@@ -200,10 +273,8 @@ function buildReferenceBindingSection(canonicalJob) {
 
   const accessoryItems = canonicalJob.entities.accessory.items || [];
   if (accessoryItems.some((item) => usesReferenceAuthority(item, accessoryUsesReference))) {
-    lines.push('Accessory refs = locked design authority for that accessory item only.');
+    lines.push('Accessory refs = locked design authority for their own item only; never identity authority.');
   }
-
-  lines.push('Do not transfer identity from accessory reference images.');
 
   return {
     id: 'reference_binding',

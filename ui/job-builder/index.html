@@ -9,293 +9,229 @@
   </head>
   <body data-route="job-builder">
     <div class="app-shell">
-      <aside class="app-sidebar">
-        <div class="sidebar-title">Retouchio Araçları</div>
-        <nav class="sidebar-nav">
-          <a class="nav-link" data-nav-route="job-builder" href="/job-builder">Üretim Akışı</a>
-          <a class="nav-link" data-nav-route="asset-manager" href="/asset-manager">Referans Kütüphanesi</a>
-          <a class="nav-link" data-nav-route="input-manager" href="/input-manager">Hedef Girdiler</a>
-          <a class="nav-link" data-nav-route="batch-jobs" href="/batch-jobs">Toplu İşler</a>
-        </nav>
-        <div class="sidebar-footer">Üretim kurgulama alanı</div>
+      <aside class="app-sidebar production-sidebar">
+        <div class="sidebar-brand">
+          <span class="sidebar-brand-mark" aria-hidden="true"></span>
+          <strong>Retouchio</strong>
+        </div>
+
+        <div class="sidebar-section-stack">
+          <section class="sidebar-section">
+            <p class="sidebar-section-label">Birincil</p>
+            <nav class="sidebar-nav">
+              <a class="nav-link" data-nav-route="job-builder" href="/job-builder">
+                <span class="nav-link-icon" aria-hidden="true">⌘</span>
+                <span>Üretim Akışı</span>
+              </a>
+              <a class="nav-link" data-nav-route="asset-manager" href="/asset-manager">
+                <span class="nav-link-icon" aria-hidden="true">⌗</span>
+                <span>Referans Kütüphanesi</span>
+              </a>
+              <a class="nav-link" data-nav-route="input-manager" href="/input-manager">
+                <span class="nav-link-icon" aria-hidden="true">▣</span>
+                <span>Hedef Girdiler</span>
+              </a>
+              <a class="nav-link" data-nav-route="batch-jobs" href="/batch-jobs">
+                <span class="nav-link-icon" aria-hidden="true">◫</span>
+                <span>Toplu İşler</span>
+              </a>
+            </nav>
+          </section>
+
+          <section class="sidebar-section">
+            <p class="sidebar-section-label">Sistem</p>
+            <div class="sidebar-system-links" aria-hidden="true">
+              <div class="sidebar-system-link">
+                <span class="nav-link-icon">◌</span>
+                <span>Modeller</span>
+              </div>
+              <div class="sidebar-system-link">
+                <span class="nav-link-icon">⋄</span>
+                <span>Seçenekler</span>
+              </div>
+              <div class="sidebar-system-link">
+                <span class="nav-link-icon">✦</span>
+                <span>Hazırlar</span>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <div class="sidebar-bottom">
+          <button class="sidebar-utility" type="button">Ayarlar</button>
+          <button class="sidebar-utility" type="button">Daralt</button>
+        </div>
       </aside>
 
       <main class="app-main">
-        <header class="app-page-header">
-          <h1>Üretim Akışı</h1>
-          <p>Girdileri, model davranışını, ürün katmanını ve stil kararlarını tek akışta yönetin.</p>
+        <header class="app-page-header production-page-header">
+          <div class="production-page-title">
+            <h1>Üretim Akışı</h1>
+            <p class="production-breadcrumb">Ana Sayfa <span aria-hidden="true">›</span> Üretim Akışı</p>
+          </div>
+          <div class="production-page-actions">
+            <a class="button button-outline button-small" href="/batch-jobs">Çalıştırmalar</a>
+            <div class="production-avatar" aria-hidden="true">RT</div>
+          </div>
         </header>
 
         <div class="app-content">
           <div class="page-shell production-shell">
             <div id="statusBanner" class="status-banner" hidden></div>
 
-            <section class="production-top-grid" aria-label="Yapılandırma">
-              <div class="production-column">
-                <section class="card shell-card target-shell">
-                  <div class="shell-section-header">
-                    <p class="step-label">Adım 1</p>
-                    <h2>Hedef Girdiler</h2>
-                    <p>Bu çalıştırmada işlenecek hedef görsel kümesini seçin.</p>
-                  </div>
-
-                  <div class="shell-card-body">
-                    <label class="field">
-                      <span>Girdi Kümesi</span>
-                      <select id="inputSource"></select>
-                      <p id="inputSourceHint" class="field-hint"></p>
-                    </label>
-
-                    <div class="action-strip production-flow-secondary-actions">
-                      <button id="createInputSetButton" class="button button-secondary" type="button">Girdi Kümesi Oluştur</button>
-                      <a class="button button-outline" href="/input-manager">Girdi Kümelerini Yönet</a>
+            <section class="production-layout" aria-label="Üretim akışı yerleşimi">
+              <section class="production-config-stage" aria-label="Yapılandırma">
+                <div class="production-reference-grid">
+                  <section class="card shell-card target-shell production-panel production-panel-target">
+                    <div class="shell-section-header shell-section-header-inline">
+                      <div class="section-title-row">
+                        <h2>Hedef Girdiler</h2>
+                        <span class="section-info" aria-hidden="true">i</span>
+                      </div>
+                      <a class="section-manage-link" href="/input-manager">Kümeleri Yönet</a>
                     </div>
 
-                    <div id="targetInputSummary" class="input-set-summary"></div>
-                  </div>
-                </section>
-              </div>
-
-              <div class="production-column">
-                <section class="card shell-card model-shell">
-                  <div class="shell-section-header">
-                    <p class="step-label">Adım 2</p>
-                    <h2>Model / Konu</h2>
-                    <p>Konu kimliği, referans davranışı ve koruma sınırlarını yönetin.</p>
-                  </div>
-
-                  <div class="model-card-stack">
-                    <article class="shell-subcard">
-                      <div class="subcard-header">
-                        <h3>Konu Kimliği</h3>
-                        <p>Kimlik davranışını ve konu referansını belirleyin.</p>
-                      </div>
-
-                      <div id="identityModeControl" class="segmented-control segmented-control-wide" role="group" aria-label="Konu kimliği modu">
-                        <button type="button" class="segmented-button" data-identity-mode="preserve">Koru</button>
-                        <button type="button" class="segmented-button" data-identity-mode="replace">Değiştir</button>
-                        <button type="button" class="segmented-button" data-identity-mode="ignore">Yok Say</button>
-                      </div>
-
-                      <p id="identityHelperText" class="helper-line"></p>
-
-                      <label id="subjectReferencePickerField" class="field">
-                        <span>Konu Referansı</span>
-                        <select id="subjectReferencePicker"></select>
-                        <p id="subjectReferencePickerHint" class="field-hint">Akış içinden mevcut bir konu referansı seçin.</p>
+                    <div class="shell-card-body target-shell-body">
+                      <label class="field field-tight">
+                        <span>Seçili Küme</span>
+                        <select id="inputSource"></select>
                       </label>
+                      <div id="targetInputSummary" class="input-set-summary"></div>
+                      <button id="createInputSetButton" class="button button-secondary target-create-button" type="button">Girdi Kümesi Oluştur</button>
+                      <p id="inputSourceHint" class="field-hint target-input-hint"></p>
+                    </div>
+                  </section>
 
-                      <div id="identityReplaceDropzone" class="reference-dropzone" hidden>
-                        <input id="identityReferenceInput" type="file" accept="image/*" hidden />
-                        <div class="reference-dropzone-copy">
-                          <strong>Konu Referansı</strong>
-                          <span>Bir görsel bırakın ya da dosya seçerek konu referansını hazırlayın.</span>
-                        </div>
-                        <button id="identityReferenceButton" class="button button-secondary" type="button">Konu Referansı Yükle</button>
-
-                        <div id="identityReferencePreview" class="reference-preview" hidden>
-                          <img id="identityReferencePreviewImage" alt="Konu referansı önizlemesi" />
-                          <div>
-                            <p id="identityReferenceName" class="reference-preview-name">Dosya seçilmedi</p>
-                            <p class="reference-preview-note">Yalnızca arayüz önizlemesi.</p>
-                          </div>
-                        </div>
+                  <section class="card shell-card model-shell production-panel production-panel-model">
+                    <div class="shell-section-header shell-section-header-inline">
+                      <div class="section-title-row">
+                        <h2>Model / Konu</h2>
+                        <span class="section-info" aria-hidden="true">i</span>
                       </div>
-                    </article>
-
-                    <article class="shell-subcard">
-                      <div class="subcard-header">
-                        <h3>Konu Rötuşu</h3>
-                        <p>Konu görünümünü destekleyen hafif düzeltme ve son dokunuşları seçin.</p>
-                      </div>
-                      <div class="subcard-group-stack">
-                        <div class="subcard-inline-group">
-                          <p class="subcard-inline-label">Düzeltmeler</p>
-                          <div id="physicalCorrectionsGroup" class="pill-group" role="group" aria-label="Konu düzeltmeleri"></div>
-                        </div>
-                        <div class="subcard-inline-group">
-                          <p class="subcard-inline-label">Son Dokunuş</p>
-                          <div id="aestheticEnhancementsGroup" class="pill-group" role="group" aria-label="Son dokunuş ayarları"></div>
-                        </div>
-                      </div>
-                    </article>
-
-                    <article class="shell-subcard">
-                      <div class="subcard-header">
-                        <h3>Koruma Kuralları</h3>
-                        <p>Kimlik, poz ve ürün doğruluğunu koruyan sınırları burada tutun.</p>
-                      </div>
-                      <div id="constraintsGroup" class="pill-group" role="group" aria-label="Koruma kuralları"></div>
-                    </article>
-                  </div>
-                </section>
-              </div>
-
-              <div class="production-column">
-                <section class="card shell-card product-shell">
-                  <div class="shell-section-header">
-                    <p class="step-label">Adım 3</p>
-                    <h2>Ürün / Giysi</h2>
-                    <p>Ürün korumasını ve grup düzeyindeki giysi referanslarını yönetin.</p>
-                  </div>
-
-                  <div class="shell-card-body product-body">
-                    <div class="product-stage-stack">
-                      <article class="shell-subcard product-subcard">
-                        <div class="subcard-header">
-                          <h3>Ürün Koruma</h3>
-                          <p>Ürün katmanının yorum yönünü seçin.</p>
-                        </div>
-
-                        <div id="productIntentControl" class="segmented-control" role="group" aria-label="Ürün yaklaşımı">
-                          <button type="button" class="segmented-button" data-product-intent="preserve">Koru</button>
-                          <button type="button" class="segmented-button" data-product-intent="clean">Temizle</button>
-                          <button type="button" class="segmented-button" data-product-intent="restyle">Yeniden Yorumla</button>
-                        </div>
-                        <p id="productHelperText" class="helper-line product-intent-helper">Ürün katmanı grup düzeyinde ele alınır.</p>
-                      </article>
-
-                      <article class="shell-subcard product-subcard">
-                        <div class="subcard-header">
-                          <h3>Ürün Grubu</h3>
-                          <p>Seçili kümedeki tüm görünümleri ortak ürün bağlamında yönetin.</p>
-                        </div>
-                        <div id="productGroupContext" class="product-group-context"></div>
-                      </article>
-
-                      <article class="shell-subcard product-subcard">
-                        <div class="subcard-header">
-                          <h3>Detay Referansları</h3>
-                          <p>Kumaş, desen ve detay referanslarını ürün grubu düzeyinde bağlayın.</p>
-                        </div>
-                        <div id="productReferenceSummary" class="product-reference-grid"></div>
-                      </article>
+                      <a class="section-manage-link" href="/asset-manager">Tüm Referansları Yönet</a>
                     </div>
 
-                    <details class="card-subpanel">
-                      <summary>Referans Kimlikleri</summary>
-                      <div class="card-subpanel-body">
-                        <label class="field field-block">
-                          <span>Kumaş Referansı</span>
-                          <textarea id="garmentMaterialRefs" rows="3" placeholder="Her satıra bir referans kimliği"></textarea>
-                          <p class="field-hint">Malzeme ve yüzey karakteri için ürün bazlı referans alanı.</p>
-                        </label>
+                    <div id="modelShellContent" class="model-shell-content"></div>
+                  </section>
 
-                        <label class="field field-block">
-                          <span>Desen / Doku Referansı</span>
-                          <textarea id="garmentPatternRefs" rows="3" placeholder="Her satıra bir referans kimliği"></textarea>
-                          <p class="field-hint">Desen, motif ve doku yönünü bu ürün grubuna bağlar.</p>
-                        </label>
+                  <section class="card shell-card styling-shell production-panel production-panel-styling">
+                    <div class="shell-section-header shell-section-header-inline">
+                      <div class="section-title-row">
+                        <h2>Stil / Aksesuar</h2>
+                        <span class="section-info" aria-hidden="true">i</span>
                       </div>
-                    </details>
-                  </div>
-                </section>
+                      <a class="section-manage-link" href="/asset-manager">Tüm Referansları Yönet</a>
+                    </div>
 
-                <section class="card shell-card styling-shell">
-                  <div class="shell-section-header">
-                    <p class="step-label">Adım 4</p>
-                    <h2>Stil / Aksesuar</h2>
-                    <p>Gözlük, çanta, başlık ve ayakkabı kararlarını yönetin.</p>
-                  </div>
-
-                  <div id="stylingAccordion" class="styling-accordion"></div>
-                </section>
-              </div>
-            </section>
-
-            <section class="card result-system-card">
-              <div class="result-review-block">
-                <div class="result-block-header result-block-header-review">
-                  <div>
-                    <h3>Ön Kontrol</h3>
-                    <p class="result-block-copy">Çalıştırmadan önce akış kurulumunu hızlıca doğrulayın.</p>
-                  </div>
-                  <p id="reviewSentence" class="review-sentence"></p>
+                    <div id="stylingAccordion" class="styling-accordion"></div>
+                    <button id="stylingDetailToggle" class="section-detail-link" type="button">Stil Ayrıntılarını Düzenle</button>
+                  </section>
                 </div>
 
-                <div id="reviewCards" class="review-card-grid"></div>
-              </div>
-
-              <section id="compileInspectPanel" class="result-inspect-block" aria-labelledby="compileInspectTitle">
-                <button
-                  id="compileInspectToggle"
-                  class="inspect-panel-toggle"
-                  type="button"
-                  aria-expanded="true"
-                  aria-controls="compileInspectBody"
-                >
-                  <div class="inspect-panel-toggle-main">
-                    <div class="inspect-panel-title-group">
-                      <div class="inspect-panel-title-row">
-                        <span class="inspect-panel-eyebrow">Derleme İncelemesi</span>
-                        <span class="inspect-panel-badge">İnceleme</span>
-                      </div>
-                      <div class="inspect-panel-copy">
-                        <h3 id="compileInspectTitle">Seçimler, kanonik durum ve referans bağlarını hızlıca kontrol edin.</h3>
-                        <p>Alt sekmeler yalnızca gereken tanı bilgisini gösterir.</p>
-                      </div>
+                <section class="card shell-card product-shell product-shell-compact production-panel production-product-bridge">
+                  <div class="shell-section-header shell-section-header-inline shell-section-header-compact-card">
+                    <div class="section-title-row">
+                      <h2>Ürün / Giysi</h2>
+                      <span class="section-info" aria-hidden="true">i</span>
                     </div>
-                    <div class="inspect-panel-toggle-side">
-                      <div id="compileInspectMeta" class="inspect-panel-meta"></div>
-                      <span class="inspect-panel-caret" aria-hidden="true"></span>
-                    </div>
+                    <span class="section-kicker">Adım 3</span>
                   </div>
-                </button>
 
-                <div id="compileInspectBody" class="inspect-panel-body">
-                  <div id="compileInspectTabs" class="inspect-tab-bar" role="tablist" aria-label="Derleme inceleme sekmeleri"></div>
-                  <div id="compileInspectContent" class="inspect-panel-content"></div>
-                </div>
+                  <div id="productShellContent" class="product-shell-content"></div>
+                </section>
               </section>
 
-              <div class="result-strip-block">
-                <div class="result-block-header">
-                  <div>
-                    <h3>Varyasyonlar</h3>
+              <section class="production-result-stage" aria-label="Çıktı akışı">
+                <div class="result-review-block production-review-strip shell-strip-card">
+                  <div class="review-strip-icon" aria-hidden="true">⌘</div>
+                  <div class="review-strip-copy">
+                    <h3>Kontrol</h3>
+                    <p id="reviewSentence" class="review-sentence"></p>
+                    <div id="reviewCards" class="review-card-grid"></div>
                   </div>
-                  <p class="result-block-copy">İncelemek istediğiniz çıktıyı seçin.</p>
+                  <button id="reviewSummaryButton" class="button button-secondary button-small" type="button">Tam Özeti Gör</button>
                 </div>
 
-                <div id="variationStrip" class="variation-strip"></div>
-              </div>
-
-              <div class="result-hero-block">
-                <div class="result-block-header">
-                  <div>
-                    <h3>Çıktı Önizlemesi</h3>
-                  </div>
-                  <p id="heroPreviewLabel" class="result-block-copy">Varyasyon 01</p>
-                </div>
-
-                <div id="heroPreviewCompare" class="hero-preview-shell is-compare">
-                  <section class="hero-preview-pane">
-                    <p class="hero-preview-label">Önce</p>
-                    <div class="hero-preview-frame">
-                      <img id="heroBeforeImage" alt="Önce önizlemesi" hidden />
-                      <div id="heroBeforeEmpty" class="hero-preview-empty">Kaynak görseli önizlemek için bir girdi kümesi seçin.</div>
+                <section id="compileInspectPanel" class="result-inspect-block production-inspect-band shell-strip-card" aria-labelledby="compileInspectTitle">
+                  <button
+                    id="compileInspectToggle"
+                    class="inspect-panel-toggle"
+                    type="button"
+                    aria-expanded="true"
+                    aria-controls="compileInspectBody"
+                  >
+                    <div class="inspect-panel-toggle-main">
+                      <div class="inspect-panel-title-group">
+                        <div class="inspect-panel-title-row">
+                          <span class="inspect-panel-eyebrow">Derleme İncelemesi</span>
+                          <span class="inspect-panel-badge">İnceleme</span>
+                        </div>
+                        <div class="inspect-panel-copy">
+                          <h3 id="compileInspectTitle">Seçimler, kanonik durum ve referans bağlarını hızlıca kontrol edin.</h3>
+                          <p>Yalnızca gerekli tanı özeti gösterilir.</p>
+                        </div>
+                      </div>
+                      <div class="inspect-panel-toggle-side">
+                        <div id="compileInspectMeta" class="inspect-panel-meta"></div>
+                        <span class="inspect-panel-caret" aria-hidden="true"></span>
+                      </div>
                     </div>
-                  </section>
+                  </button>
 
-                  <section class="hero-preview-pane hero-preview-pane-output">
-                    <p class="hero-preview-label">Sonra</p>
-                    <div class="hero-preview-frame">
-                      <img id="heroAfterImage" alt="Çıktı önizlemesi" hidden />
-                      <div id="heroAfterEmpty" class="hero-preview-empty">Henüz varyasyon seçilmedi.</div>
+                  <div id="compileInspectBody" class="inspect-panel-body">
+                    <div id="compileInspectTabs" class="inspect-tab-bar" role="tablist" aria-label="Derleme inceleme sekmeleri"></div>
+                    <div id="compileInspectContent" class="inspect-panel-content"></div>
+                  </div>
+                </section>
+
+                <section class="card production-output-stage" aria-label="Varyasyon ve önizleme">
+                  <div class="result-strip-block production-variation-band">
+                    <div class="result-block-header result-block-header-variations">
+                      <div class="variation-header-copy">
+                        <div class="variation-header-title-row">
+                          <h3>Varyasyonlar</h3>
+                          <span id="variationCount" class="variation-count">0 / 0</span>
+                        </div>
+                        <p class="result-block-copy">Tercih ettiğiniz çıktıyı seçin.</p>
+                      </div>
+                      <button id="compareOutputButton" class="button button-secondary button-small" type="button">Karşılaştır</button>
                     </div>
-                  </section>
-                </div>
 
-                <div class="hero-output-footer">
-                  <div class="action-strip hero-output-actions">
-                    <button id="downloadOutputButton" class="button button-secondary" type="button">İndir</button>
-                    <button id="approveOutputButton" class="button button-secondary" type="button">Onayla</button>
-                    <button id="regenerateOutputButton" class="button button-secondary" type="button">Yeniden Üret</button>
-                    <button id="compareOutputButton" class="button button-secondary" type="button">Karşılaştır</button>
+                    <div id="variationStrip" class="variation-strip"></div>
                   </div>
 
-                  <div id="outputMeta" class="output-meta-list"></div>
-                </div>
-              </div>
+                  <div class="result-hero-block production-preview-stage">
+                    <div id="heroPreviewCompare" class="hero-preview-shell is-compare">
+                      <section class="hero-preview-pane">
+                        <div class="hero-preview-frame">
+                          <p class="hero-preview-label hero-preview-label-before">Önce</p>
+                          <img id="heroBeforeImage" alt="Önce önizlemesi" hidden />
+                          <div id="heroBeforeEmpty" class="hero-preview-empty">Kaynak görseli önizlemek için bir girdi kümesi seçin.</div>
+                        </div>
+                      </section>
+
+                      <section class="hero-preview-pane hero-preview-pane-output">
+                        <div class="hero-preview-frame">
+                          <p class="hero-preview-label hero-preview-label-after">Sonra</p>
+                          <img id="heroAfterImage" alt="Çıktı önizlemesi" hidden />
+                          <div id="heroAfterEmpty" class="hero-preview-empty">Henüz varyasyon seçilmedi.</div>
+                        </div>
+                      </section>
+                    </div>
+
+                    <div class="hero-output-footer">
+                      <div id="outputMeta" class="output-meta-list"></div>
+                      <div class="action-strip hero-output-actions">
+                        <button id="downloadOutputButton" class="button button-outline button-small" type="button">İndir</button>
+                        <button id="approveOutputButton" class="button button-outline button-small" type="button">Onayla</button>
+                        <button id="regenerateOutputButton" class="button button-outline button-small" type="button">Yeniden Üret</button>
+                      </div>
+                    </div>
+
+                    <p id="heroPreviewLabel" class="hero-preview-caption">Varyasyon 01</p>
+                  </div>
+                </section>
+              </section>
             </section>
 
             <div class="hidden-ui-store" aria-hidden="true">
@@ -313,9 +249,43 @@
               <div id="workflowVisibleSummary"></div>
               <div id="configurationStepHint"></div>
 
+              <div id="identityModeControl"></div>
+              <div id="productIntentControl"></div>
+              <p id="identityHelperText"></p>
+              <p id="productHelperText"></p>
+
+              <label id="subjectReferencePickerField" class="field">
+                <span>Konu Referansı</span>
+                <select id="subjectReferencePicker"></select>
+                <p id="subjectReferencePickerHint" class="field-hint">Akış içinden mevcut bir konu referansı seçin.</p>
+              </label>
+
+              <div id="identityReplaceDropzone" class="reference-dropzone" hidden>
+                <input id="identityReferenceInput" type="file" accept="image/*" hidden />
+                <div class="reference-dropzone-copy">
+                  <strong>Konu Referansı</strong>
+                  <span>Bir görsel bırakın ya da dosya seçerek konu referansını hazırlayın.</span>
+                </div>
+                <button id="identityReferenceButton" class="button button-secondary" type="button">Konu Referansı Yükle</button>
+
+                <div id="identityReferencePreview" class="reference-preview" hidden>
+                  <img id="identityReferencePreviewImage" alt="Konu referansı önizlemesi" />
+                  <div>
+                    <p id="identityReferenceName" class="reference-preview-name">Dosya seçilmedi</p>
+                    <p class="reference-preview-note">Yalnızca arayüz önizlemesi.</p>
+                  </div>
+                </div>
+              </div>
+
               <select id="subjectMode"></select>
               <select id="subjectReferenceId"></select>
               <select id="garmentMode"></select>
+              <textarea id="garmentMaterialRefs" rows="3" placeholder="Her satıra bir referans kimliği"></textarea>
+              <textarea id="garmentPatternRefs" rows="3" placeholder="Her satıra bir referans kimliği"></textarea>
+              <div id="productGroupContext"></div>
+              <div id="productReferenceSummary"></div>
+              <img id="productBeforeImage" alt="" />
+              <div id="productBeforeEmpty"></div>
 
               <div id="eyewearCard">
                 <select id="eyewearAction"></select>
@@ -454,33 +424,40 @@
               </select>
               <div id="batchJobsEmpty"></div>
               <div id="batchJobsList"></div>
+
             </div>
           </div>
         </div>
 
-          <div class="job-builder-action-bar" role="region" aria-label="Çalıştırma denetimleri">
-            <div class="job-builder-action-bar-inner">
-              <div class="job-builder-action-bar-status">
-                <div class="action-bar-status-pill">
-                <span>Derleme</span>
-                <strong id="actionBarCompileStatus">Boşta</strong>
-              </div>
-              <div class="action-bar-status-pill">
-                <span>Kuru Kontrol</span>
-                <strong id="actionBarReadinessStatus">Bilinmiyor</strong>
-              </div>
-              <div class="action-bar-status-pill">
-                <span>Toplu İş</span>
-                <strong id="actionBarBatchStatus">Boşta</strong>
-              </div>
-              <p id="executionActionHint" class="execution-action-bar-hint">İptal edilecek bekleyen ya da çalışan bir toplu iş yok.</p>
-            </div>
-
+        <div class="job-builder-action-bar" role="region" aria-label="Çalıştırma denetimleri">
+          <div class="job-builder-action-bar-inner action-dock">
             <div class="action-strip action-bar-actions">
               <button id="compileButton" class="button button-secondary" type="button">Derle</button>
-              <button id="runDryCheckButton" class="button button-secondary" type="button">Kuru Kontrol</button>
+              <button id="runDryCheckButton" class="button button-secondary" type="button">Kontrol</button>
               <button id="runBatchButton" class="button button-primary" type="button">Toplu Çalıştır</button>
               <button id="cancelActiveBatchButton" class="button button-outline" type="button">İptal Et</button>
+            </div>
+
+            <div class="job-builder-action-bar-meta">
+              <div class="job-builder-action-bar-status action-dock-status">
+                <div class="action-bar-status-pill shell-status-pill is-neutral" data-status-tone="compile">
+                  <span>Derleme</span>
+                  <strong id="actionBarCompileStatus">Bekliyor</strong>
+                </div>
+                <div class="action-bar-status-pill shell-status-pill is-neutral" data-status-tone="readiness">
+                  <span>Kontrol</span>
+                  <strong id="actionBarReadinessStatus">Bekliyor</strong>
+                </div>
+                <div class="action-bar-status-pill shell-status-pill is-neutral" data-status-tone="batch">
+                  <span>Çalıştırma</span>
+                  <strong id="actionBarBatchStatus">Boşta</strong>
+                </div>
+              </div>
+
+              <div class="action-bar-status-copy">
+                <p id="actionBarSystemMessage" class="shell-inline-note" hidden></p>
+                <p id="executionActionHint" class="execution-action-bar-hint">İptal edilecek bekleyen ya da çalışan bir toplu iş yok.</p>
+              </div>
             </div>
           </div>
         </div>

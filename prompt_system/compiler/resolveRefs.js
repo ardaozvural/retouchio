@@ -63,6 +63,10 @@ function assertStandardId(standard, entityKey, value, accessoryFamily = null) {
   }
 }
 
+function subjectUsesReference(entity) {
+  return Boolean(entity && entity.source === 'reference' && entity.reference_id);
+}
+
 function resolveReferences(canonicalJob, options = {}) {
   const rootDir = options.rootDir || path.resolve(__dirname, '..', '..');
   const standard = loadAssetBankStandard(rootDir);
@@ -79,7 +83,7 @@ function resolveReferences(canonicalJob, options = {}) {
     accessory: [],
   };
 
-  if (entities.subject?.reference_id) {
+  if (subjectUsesReference(entities.subject)) {
     assertStandardId(standard, 'subject', entities.subject.reference_id);
     refs.subject = resolveImageAsset(
       getCandidateDirsForEntity(standard, rootDir, 'subject'),

@@ -7,6 +7,10 @@ const accessoryModule = require('../modules/accessory');
 const sceneModule = require('../modules/scene');
 const outputProfileModule = require('../modules/output_profile');
 const globalNegativeRulesModule = require('../modules/global_negative_rules');
+const {
+  GARMENT_REFINEMENT_LEVELS,
+  SUBJECT_REFINEMENT_LEVELS,
+} = require('./schemaConstants');
 
 const MODULES = {
   core: coreModule,
@@ -80,12 +84,16 @@ function createBaseEntities(defaultOutputProfile) {
   return {
     subject: {
       mode: 'preserve',
+      source: 'system',
       variant: 'identity_reference',
       reference_id: null,
       reference_ids: [],
+      face_refinement: 'preserve',
+      pose_refinement: 'preserve',
     },
     garment: {
       mode: 'preserve',
+      refinement_level: 'preserve',
       variant: 'source_garment',
       detail_refs: {
         material: [],
@@ -131,8 +139,14 @@ function createBaseEntities(defaultOutputProfile) {
 }
 
 function normalizeSemanticModes(entities) {
-  if (entities.subject.mode === 'lock') {
-    entities.subject.mode = 'preserve';
+  entities.subject.mode = normalizeSubjectMode(entities.subject.mode);
+
+  if (entities.garment.mode === 'clean') {
+    entities.garment.mode = 'preserve';
+    entities.garment.refinement_level = 'minimal';
+  } else if (entities.garment.mode === 'restyle') {
+    entities.garment.mode = 'preserve';
+    entities.garment.refinement_level = entities.garment.refinement_level || 'repair';
   }
 
   if (entities.scene.mode && entities.scene.mode !== 'apply' && entities.scene.mode !== 'preserve' && entities.scene.mode !== 'ignore') {
@@ -151,6 +165,43 @@ function normalizeSemanticModes(entities) {
   if (entities.accessory.mode && entities.accessory.mode !== 'apply' && entities.accessory.mode !== 'ignore') {
     entities.accessory.mode = 'apply';
   }
+}
+
+function normalizeGarmentRefinementLevel(refinementLevel, mode) {
+  if (GARMENT_REFINEMENT_LEVELS.includes(refinementLevel)) {
+    return refinementLevel;
+  }
+  if (mode === 'restyle') {
+    return 'repair';
+  }
+  if (mode === 'clean') {
+    return 'minimal';
+  }
+  return 'preserve';
+}
+
+function normalizeSubjectMode(mode) {
+  if (mode === 'transfer_identity' || mode === 'replace') {
+    return 'transfer_identity';
+  }
+  if (mode === 'preserve' || mode === 'lock' || mode === 'ignore') {
+    return 'preserve';
+  }
+  return 'preserve';
+}
+
+function normalizeSubjectSource(source, mode, referenceId) {
+  if (mode === 'transfer_identity') {
+    return 'reference';
+  }
+  return referenceId ? 'reference' : 'system';
+}
+
+function normalizeSubjectRefinementLevel(value) {
+  if (SUBJECT_REFINEMENT_LEVELS.includes(value)) {
+    return value;
+  }
+  return 'preserve';
 }
 
 function hasReferenceAsset(entity) {
@@ -282,7 +333,6 @@ function applyExistingEntityMapping(job, entities) {
   const legacyEntities = job.entities || {};
 
   if (legacyEntities.subject?.reference && !entities.subject.reference_id) {
-    entities.subject.mode = entities.subject.mode === 'ignore' ? 'preserve' : entities.subject.mode;
     entities.subject.reference_id = legacyEntities.subject.reference;
   }
 
@@ -369,7 +419,6 @@ function normalizeJob(job, options = {}) {
   };
 
   if (job.subjectReference && !canonicalEntities.subject.reference_id) {
-    canonicalEntities.subject.mode = canonicalEntities.subject.mode === 'ignore' ? 'preserve' : canonicalEntities.subject.mode;
     canonicalEntities.subject.reference_id = job.subjectReference;
     canonicalEntities.subject.reference_ids = ensureArray(job.subjectReference);
   }
@@ -385,14 +434,32 @@ function normalizeJob(job, options = {}) {
 
   normalizeSemanticModes(canonicalEntities);
   normalizeIntentFields(canonicalEntities, clone(job.entities) || {});
+  canonicalEntities.garment.refinement_level = normalizeGarmentRefinementLevel(
+    canonicalEntities.garment.refinement_level,
+    job.entities?.garment?.mode || canonicalEntities.garment.mode
+  );
 
-  canonicalEntities.subject.reference_ids = canonicalEntities.subject.reference_ids?.length
-    ? canonicalEntities.subject.reference_ids
-    : ensureArray(canonicalEntities.subject.reference_id);
-
-  if (canonicalEntities.subject.reference_id && canonicalEntities.subject.mode === 'ignore') {
-    canonicalEntities.subject.mode = 'preserve';
+  canonicalEntities.subject.reference_ids = ensureArray(canonicalEntities.subject.reference_ids)
+    .map((referenceId) => String(referenceId || '').trim())
+    .filter(Boolean);
+  if (!canonicalEntities.subject.reference_id && canonicalEntities.subject.reference_ids.length > 0) {
+    canonicalEntities.subject.reference_id = canonicalEntities.subject.reference_ids[0];
   }
+
+  canonicalEntities.subject.source = normalizeSubjectSource(
+    canonicalEntities.subject.source,
+    canonicalEntities.subject.mode,
+    canonicalEntities.subject.reference_id
+  );
+  canonicalEntities.subject.face_refinement = normalizeSubjectRefinementLevel(canonicalEntities.subject.face_refinement);
+  canonicalEntities.subject.pose_refinement = normalizeSubjectRefinementLevel(canonicalEntities.subject.pose_refinement);
+
+  canonicalEntities.subject.reference_ids = canonicalEntities.subject.reference_id
+    ? [...new Set([
+      canonicalEntities.subject.reference_id,
+      ...canonicalEntities.subject.reference_ids,
+    ])]
+    : [];
 
   return {
     version: '2',

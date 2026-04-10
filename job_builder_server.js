@@ -48,6 +48,7 @@ const DOWNLOAD_LOG_LIMIT = 20;
 const MAX_MULTIPART_BYTES = Number(process.env.ASSET_UPLOAD_MAX_BYTES || 50 * 1024 * 1024);
 const IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp']);
 const EDIT_RUNTIME_MAX_BATCH = 10;
+const SUBJECT_REFS_ROOT = path.join(ROOT_DIR, 'refs', 'subjects');
 
 const ASSET_FAMILY_CONFIG = {
   footwear: {
@@ -493,6 +494,38 @@ function nextAssetIdForFamily(rootDir, family, variant) {
   }
 
   throw new Error(`Unable to allocate asset id for family "${family}" and variant "${variant}"`);
+}
+
+function nextSubjectReferenceId(rootDir) {
+  ensureDir(SUBJECT_REFS_ROOT);
+  const entries = fs
+    .readdirSync(SUBJECT_REFS_ROOT, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && !entry.name.startsWith('._'))
+    .map((entry) => entry.name);
+
+  let maxIndex = 0;
+  for (const entry of entries) {
+    const match = entry.match(/^subject_(\d{4})$/);
+    if (!match) {
+      continue;
+    }
+    const numeric = Number(match[1]);
+    if (Number.isFinite(numeric) && numeric > maxIndex) {
+      maxIndex = numeric;
+    }
+  }
+
+  let next = maxIndex + 1;
+  while (next < 10000) {
+    const candidate = `subject_${String(next).padStart(4, '0')}`;
+    const candidatePath = path.join(SUBJECT_REFS_ROOT, candidate);
+    if (!fs.existsSync(candidatePath)) {
+      return candidate;
+    }
+    next += 1;
+  }
+
+  throw new Error('Unable to allocate subject reference id.');
 }
 
 function inferVariantFromAssetId(family, assetId) {
@@ -1559,6 +1592,62 @@ function createServer() {
         logStep('asset.upload.error', error.message || 'unknown');
         sendJson(res, 400, {
           error: error.message || 'Asset upload failed.',
+        });
+      }
+      return;
+    }
+
+    if (req.method === 'POST' && url.pathname === '/api/subjects/upload') {
+      try {
+        logStep('subject.upload.start');
+        const multipart = await parseMultipartFormData(req);
+        const files = multipart.files.filter((item) => item.fieldName === 'files' || item.fieldName === 'files[]');
+
+        if (files.length === 0) {
+          sendJson(res, 400, { error: 'No files uploaded. Use files[] field.' });
+          return;
+        }
+
+        const referenceId = nextSubjectReferenceId(ROOT_DIR);
+        const referenceDir = path.join(SUBJECT_REFS_ROOT, referenceId);
+        ensureDir(referenceDir);
+
+        let written = 0;
+        let previewFileName = '';
+        for (const file of files) {
+          if (!file?.buffer || file.buffer.length === 0) {
+            continue;
+          }
+          const ext = resolveImageExtension(file);
+          if (!ext) {
+            continue;
+          }
+          const fileName = `ref_${String(written + 1).padStart(2, '0')}${ext}`;
+          fs.writeFileSync(path.join(referenceDir, fileName), file.buffer);
+          written += 1;
+          if (!previewFileName) {
+            previewFileName = fileName;
+          }
+        }
+
+        if (written === 0) {
+          fs.rmSync(referenceDir, { recursive: true, force: true });
+          sendJson(res, 400, { error: 'Uploaded files do not contain supported images.' });
+          return;
+        }
+
+        const relativeDir = path.relative(ROOT_DIR, referenceDir).replaceAll(path.sep, '/');
+        logStep('subject.upload.success', `${referenceId} files=${written}`);
+        sendJson(res, 200, {
+          reference_id: referenceId,
+          fileCount: written,
+          path: relativeDir,
+          preview: previewFileName ? `/${relativeDir}/${previewFileName}` : null,
+        });
+      } catch (error) {
+        logStep('subject.upload.error', error.message || 'unknown');
+        sendJson(res, 400, {
+          error: error.message || 'Subject reference upload failed.',
         });
       }
       return;

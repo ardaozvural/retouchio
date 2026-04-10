@@ -21,13 +21,10 @@ module.exports = {
 
     if (entity.mode === 'preserve') {
       lines.push('You must preserve the original footwear from the target image unchanged.');
-      lines.push('Do not replace, remove, restyle, simplify, or reinterpret the footwear.');
-      lines.push('No headwear, accessory, or scene instruction may override footwear preservation.');
-      lines.push('Preserve original footwear silhouette, finish, color family, wear condition, and contact behavior exactly.');
-      lines.push('Keep footwear integrated to the existing feet and lower-body pose without drift.');
+      lines.push('Do not replace, remove, restyle, simplify, or reinterpret the footwear; no other entity may override footwear preservation.');
+      lines.push('Preserve original footwear silhouette, finish, color family, wear condition, and clean integration to the existing feet and lower-body pose.');
     } else if (entity.mode === 'replace') {
-      lines.push('You must remove the original footwear and replace it with the requested footwear result.');
-      lines.push('Do not preserve any original footwear details once replacement is active.');
+      lines.push('You must remove the original footwear and replace it with the requested footwear result; do not preserve any original footwear details once replacement is active.');
       if (slotConfig?.referenceBindingText && entity.asset_id) {
         lines.push(slotConfig.referenceBindingText);
       }
@@ -41,8 +38,7 @@ module.exports = {
         lines.push('Lock silhouette, construction read, sole logic, finish, and color family to the intended replacement.');
       }
     } else if (entity.mode === 'remove') {
-      lines.push('You must remove footwear completely from the result.');
-      lines.push('Do not add replacement footwear, socks, slippers, or substitute styling items.');
+      lines.push('You must remove footwear completely from the result and must not add replacement footwear, socks, slippers, or substitute styling items.');
       lines.push('Preserve foot anatomy, toe structure, ankle continuity, and believable grounding after footwear removal.');
       lines.push('Do not change garment length, lower drape, or pose class just to support footwear removal.');
     }
@@ -51,9 +47,8 @@ module.exports = {
       lines.push('Feet must remain physically believable with clean ground interaction and no cutout artifacts.');
       lines.push('Do not leave partial soles, shoe fragments, floating shadows, or clipped toes.');
     } else {
-      lines.push('Footwear must attach cleanly to the feet with believable perspective, scale, and ankle alignment.');
-      lines.push('Preserve realistic toe direction, heel contact, and sole orientation relative to the body pose.');
-      lines.push('Maintain clean contact with the ground plane; no floating shoes, broken shadows, or clipped feet.');
+      lines.push('Footwear must attach cleanly to the feet with believable perspective, scale, ankle alignment, and sole orientation relative to the body pose.');
+      lines.push('Maintain realistic toe direction, heel contact, and clean ground contact; no floating shoes, broken shadows, or clipped feet.');
     }
 
     return [

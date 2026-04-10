@@ -6,10 +6,17 @@
   "entities": {
     "subject": {
       "mode": "preserve",
-      "reference_id": "subject_0001"
+      "source": "reference",
+      "reference_id": "subject_0005",
+      "reference_ids": [
+        "subject_0005"
+      ],
+      "face_refinement": "preserve",
+      "pose_refinement": "preserve"
     },
     "garment": {
       "mode": "preserve",
+      "refinement_level": "preserve",
       "detail_refs": {
         "material": [],
         "pattern": []

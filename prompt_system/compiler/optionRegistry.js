@@ -35,6 +35,19 @@ function listDirectories(dirPath) {
     .sort((a, b) => a.localeCompare(b, 'en'));
 }
 
+function listImageFiles(dirPath) {
+  if (!fs.existsSync(dirPath)) {
+    return [];
+  }
+
+  return fs
+    .readdirSync(dirPath, { withFileTypes: true })
+    .filter((entry) => entry.isFile())
+    .map((entry) => entry.name)
+    .filter((name) => !name.startsWith('._') && /\.(jpg|jpeg|png|webp)$/i.test(name))
+    .sort((a, b) => a.localeCompare(b, 'en'));
+}
+
 function loadFrozenRegistry(rootDir) {
   const frozenPath = path.join(rootDir, FROZEN_REGISTRY_PATH);
   if (!fs.existsSync(frozenPath)) {
@@ -58,11 +71,45 @@ function readDirsFromStrategy(rootDir, relPaths = []) {
   return unique(relPaths.flatMap((relPath) => listDirectories(path.join(rootDir, relPath))));
 }
 
+function buildSubjectReferenceEntries(rootDir, relPaths = []) {
+  const entries = [];
+  const seen = new Set();
+
+  for (const relPath of relPaths) {
+    const baseDir = path.join(rootDir, relPath);
+    if (!fs.existsSync(baseDir)) {
+      continue;
+    }
+
+    const ids = listDirectories(baseDir);
+    for (const referenceId of ids) {
+      if (seen.has(referenceId)) {
+        continue;
+      }
+      seen.add(referenceId);
+      const refDir = path.join(baseDir, referenceId);
+      const files = listImageFiles(refDir);
+      const previewFile = files[0] || null;
+      const relativeDir = path.relative(rootDir, refDir).replaceAll(path.sep, '/');
+      entries.push({
+        reference_id: referenceId,
+        preview: previewFile ? `/${relativeDir}/${previewFile}` : null,
+        fileCount: files.length,
+        path: relativeDir,
+      });
+    }
+  }
+
+  return entries.sort((a, b) => String(a.reference_id || '').localeCompare(String(b.reference_id || ''), 'en'));
+}
+
 function buildDiscoverySnapshot(rootDir, standard) {
   const strategy = standard.directoryStrategy || {};
+  const subjectReferenceEntries = buildSubjectReferenceEntries(rootDir, strategy.subject || ['refs/subjects']);
 
   return {
-    subjectReferenceIds: readDirsFromStrategy(rootDir, strategy.subject || ['refs/subjects']),
+    subjectReferenceIds: subjectReferenceEntries.map((item) => item.reference_id),
+    subjectReferenceEntries,
     garmentMaterialDetailIds: readDirsFromStrategy(rootDir, strategy.garmentMaterial || ['refs/garment_details/material']),
     garmentPatternDetailIds: readDirsFromStrategy(rootDir, strategy.garmentPattern || ['refs/garment_details/pattern']),
     footwearAssetIds: readDirsFromStrategy(rootDir, strategy.footwear || ['refs/accessories/footwear']),
@@ -82,9 +129,8 @@ function buildOptionRegistry(rootDir = path.resolve(__dirname, '..', '..')) {
   const snapshot = buildDiscoverySnapshot(rootDir, standard);
   const health = buildAssetBankHealth(rootDir);
 
-  registry.entities.subject.referenceIds = snapshot.subjectReferenceIds.length > 0
-    ? snapshot.subjectReferenceIds
-    : (registry.entities.subject.referenceIds || ['subject_0001']);
+  registry.entities.subject.referenceIds = snapshot.subjectReferenceIds;
+  registry.entities.subject.references = snapshot.subjectReferenceEntries;
   registry.entities.garment.detailRefs.material = snapshot.garmentMaterialDetailIds;
   registry.entities.garment.detailRefs.pattern = snapshot.garmentPatternDetailIds;
   registry.entities.footwear.assetIds = snapshot.footwearAssetIds;
@@ -132,11 +178,16 @@ function createDefaultBuilderJob() {
     entities: {
       subject: {
         mode: 'preserve',
+        source: 'system',
         variant: 'identity_reference',
-        reference_id: 'subject_0001',
+        reference_id: '',
+        reference_ids: [],
+        face_refinement: 'preserve',
+        pose_refinement: 'preserve',
       },
       garment: {
         mode: 'preserve',
+        refinement_level: 'preserve',
         variant: 'source_garment',
         detail_refs: {
           material: [],

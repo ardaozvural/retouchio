@@ -38,10 +38,8 @@ module.exports = {
           id: 'headwear_rules',
           label: 'Headwear Rules',
           lines: [
-            'You must preserve the original headwear state from the target image.',
-            'If the target image has no headwear, do not add any headwear.',
-            'Do not use uploaded headwear references as override authority while preservation is active.',
-            'Keep any existing headwear, hairline interaction, and local styling continuity believable and unchanged.',
+            'You must preserve the original headwear state from the target image; if the target image has no headwear, do not add any.',
+            'Do not use uploaded headwear references as override authority while preservation is active. Keep existing headwear, hairline interaction, and local styling continuity believable and unchanged.',
           ],
         },
       ];
@@ -53,10 +51,8 @@ module.exports = {
           id: 'headwear_rules',
           label: 'Headwear Rules',
           lines: [
-            'You must remove any existing headwear cleanly from the result.',
-            'Do not replace removed headwear with any new headwear item.',
-            'Remove the existing headwear cleanly without altering subject identity, hairline, or garment visibility.',
-            'Preserve believable hairline continuity, scalp coverage logic, and local styling realism after removal.',
+            'You must remove any existing headwear cleanly and must not replace it with a new headwear item.',
+            'Preserve believable hairline continuity, scalp coverage logic, and local styling realism without altering subject identity or garment visibility.',
           ],
         },
       ];
@@ -67,13 +63,11 @@ module.exports = {
     const lines = [];
 
     if (entity.mode === 'add') {
-      lines.push(`You must add ${variantLabel} headwear if it is not already present.`);
-      lines.push('Do not reinterpret this as a different headwear family.');
+      lines.push(`You must add ${variantLabel} headwear if it is not already present. Do not reinterpret this as a different headwear family.`);
     }
 
     if (entity.mode === 'replace') {
-      lines.push(`You must replace existing headwear with ${variantLabel} headwear.`);
-      lines.push(`If no headwear is present, you must add ${variantLabel} headwear instead.`);
+      lines.push(`You must replace existing headwear with ${variantLabel} headwear, or add it if none is present.`);
       lines.push('Do not preserve incompatible original headwear once replacement is active.');
     }
 
@@ -89,8 +83,7 @@ module.exports = {
       lines.push('You must keep headwear behavior tightly controlled and scoped to the requested headwear family only.');
     }
 
-    lines.push('Headwear influence must stay local to the head styling zone only.');
-    lines.push('Do not change face shape, skin tone, feature spacing, or any identity-defining characteristic.');
+    lines.push('Headwear influence must stay local to the head styling zone only; do not change face shape, skin tone, feature spacing, or any identity-defining characteristic.');
     lines.push('Keep hair interaction believable and premium; no impossible attachment, random volume spikes, or identity drift.');
     lines.push('Do not let headwear hide the face or compete with garment readability.');
 
