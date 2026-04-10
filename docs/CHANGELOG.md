@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-04-11
+- Refactored active subject control around `preserve` and `transfer_identity`, with canonical write-path support for `source`, `reference_id`, `reference_ids`, `face_refinement`, and `pose_refinement`.
+  affected files: `prompt_system/compiler/schemaConstants.js`, `prompt_system/compiler/resolveEntity.js`, `prompt_system/compiler/validateCanonicalJob.js`, `prompt_system/compiler/optionRegistry.js`, `prompt_system/registry/frozenOptions.v1.json`, `prompt_system/schemas/canonicalJob.example.json`, `jobs/job_0001.canonical.json`
+- Updated Job Builder subject UI to the active `Model / Yüz / Poz` control surface and mapped it to the new canonical subject fields.
+  affected files: `ui/job-builder/app.js`, `ui/job-builder/index.html`
+- Rebuilt subject prompt semantics as ordered identity, face refinement, and pose refinement blocks, and conditioned compiler/global negative/reference binding behavior for `transfer_identity`.
+  affected files: `prompt_system/modules/subject.js`, `prompt_system/modules/core.js`, `prompt_system/modules/global_negative_rules.js`, `prompt_system/compiler/buildPrompt.js`
+- Kept backward compatibility on the read path for legacy subject values while keeping the new schema as the active write path.
+  affected files: `prompt_system/compiler/resolveEntity.js`, `ui/job-builder/app.js`
+- Synced status docs to the current repo state after the subject-control compiler changes.
+  affected files: `docs/PROJECT_STATUS.md`, `docs/CHANGELOG.md`, `docs/NEXT_STEPS.md`, `docs/MASTER_SYSTEM_ARCHITECTURE.md`
+
 ## [Checkpoint — UI Architecture & Visual System Stabilization]
 - separated major product surfaces into real pages
 - unified the product under a shared visual system
