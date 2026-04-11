@@ -5,7 +5,7 @@ const { GoogleGenAI } = require('@google/genai');
 const { buildPrompt } = require('./prompt_system/compiler/buildPrompt');
 const { resolveReferences } = require('./prompt_system/compiler/resolveRefs');
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+const ai = process.env.GEMINI_API_KEY ? new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY }) : null;
 
 const MODEL = 'gemini-3.1-flash-image-preview';
 const MAX_BATCH = 10;
@@ -15,6 +15,13 @@ const IMAGE_CONFIG = { aspectRatio: '4:5', imageSize: '2K' };
 
 function readJson(filePath) {
   return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+}
+
+function ensureAiClient() {
+  if (!ai) {
+    throw new Error('GEMINI_API_KEY is missing.');
+  }
+  return ai;
 }
 
 function ensureDir(dirPath) {
@@ -68,8 +75,9 @@ function loadJobConfig(jobArg) {
 }
 
 async function uploadReferenceImage(filePath) {
+  const client = ensureAiClient();
   const mimeType = guessMime(filePath);
-  const uploadedFile = await ai.files.upload({
+  const uploadedFile = await client.files.upload({
     file: filePath,
     config: { mimeType },
   });
@@ -152,21 +160,33 @@ function buildRequestForImage({
   };
 }
 
-function writeBatchJsonl(requestLines) {
-  const jsonlPath = path.resolve(__dirname, 'batch_requests.jsonl');
+function resolveBatchJsonlPath(job) {
+  const runtimeJsonlPath = String(job?.runtime?.batchJsonlPath || '').trim();
+  if (!runtimeJsonlPath) {
+    return path.resolve(__dirname, 'batch_requests.jsonl');
+  }
+
+  const jsonlPath = path.resolve(__dirname, runtimeJsonlPath);
+  ensureDir(path.dirname(jsonlPath));
+  return jsonlPath;
+}
+
+function writeBatchJsonl(requestLines, job) {
+  const jsonlPath = resolveBatchJsonlPath(job);
   // Preserve the existing batch handoff format so batch submission and polling stay unchanged.
   fs.writeFileSync(jsonlPath, `${requestLines.map((row) => JSON.stringify(row)).join('\n')}\n`, 'utf8');
   return jsonlPath;
 }
 
 async function submitBatch(jsonlPath, displayName) {
-  const uploadedJsonl = await ai.files.upload({
+  const client = ensureAiClient();
+  const uploadedJsonl = await client.files.upload({
     file: jsonlPath,
     config: { mimeType: 'application/jsonl' },
   });
   console.log(`✅ Uploaded JSONL: ${uploadedJsonl.name}`);
 
-  const batchJob = await ai.batches.create({
+  const batchJob = await client.batches.create({
     model: MODEL,
     src: uploadedJsonl.name,
     config: { displayName },
@@ -210,26 +230,12 @@ async function uploadResolvedReferences(refs) {
   return uploadedRefs;
 }
 
-function moveProcessedInputs(fileNames, inputDir) {
-  const completedDir = path.join(__dirname, 'input_cmpltd');
-  ensureDir(completedDir);
-
-  for (const fileName of fileNames) {
-    const sourcePath = path.join(inputDir, fileName);
-    const targetPath = path.join(completedDir, fileName);
-    if (fs.existsSync(sourcePath)) {
-      fs.renameSync(sourcePath, targetPath);
-    }
-  }
-}
-
 async function main() {
   const jobArg = process.argv[2];
   const { legacyMode, job } = loadJobConfig(jobArg);
 
   ensureDir(path.join(__dirname, 'batch_input'));
   ensureDir(path.join(__dirname, 'batch_output'));
-  ensureDir(path.join(__dirname, 'input_cmpltd'));
 
   const inputDir = path.resolve(__dirname, job.inputSource || DEFAULT_INPUT_SOURCE);
   if (!fs.existsSync(inputDir)) {
@@ -263,6 +269,15 @@ async function main() {
   } else {
     console.log(`ℹ️ Running job config: ${job.jobConfigPath}`);
   }
+  if (job?.runtime?.runId) {
+    console.log(`ℹ️ Run staging id: ${job.runtime.runId}`);
+  }
+  if (job?.runtime?.sourceInputSource) {
+    console.log(`ℹ️ Source input library: ${job.runtime.sourceInputSource}`);
+  }
+  if (job?.runtime?.stagedInputSource) {
+    console.log(`ℹ️ Staged input directory: ${job.runtime.stagedInputSource}`);
+  }
   console.log(`ℹ️ Canonical job mode: ${canonicalJob.version}`);
   const uploadedRefs = await uploadResolvedReferences(refs);
 
@@ -283,13 +298,11 @@ async function main() {
     );
   }
 
-  const jsonlPath = writeBatchJsonl(requestLines);
+  const jsonlPath = writeBatchJsonl(requestLines, job);
   console.log(`✅ JSONL ready: ${jsonlPath}`);
 
   const displayName = `${job.displayName || job.jobId || 'retouchio-batch'}-${batchFiles.length}-${Date.now()}`;
   const batchJob = await submitBatch(jsonlPath, displayName);
-
-  moveProcessedInputs(batchFiles, inputDir);
 
   console.log(`BATCH_JOB_NAME=${batchJob.name}`);
   console.log(`BATCH_STATE=${batchJob.state}`);
