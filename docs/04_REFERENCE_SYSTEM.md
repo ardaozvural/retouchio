@@ -1,136 +1,111 @@
 # Reference System
 
-## Purpose
+## Source of Truth
 
-The active reference system is entity-driven.
+The active reference contract is split across:
 
-Reference routing now follows:
+- `prompt_system/registry/assetBankStandard.v1.json`
+- `prompt_system/compiler/assetBank.js`
+- `prompt_system/compiler/resolveRefs.js`
+- `prompt_system/compiler/optionRegistry.js`
+- upload endpoints in `job_builder_server.js`
 
-`entity -> resolved files -> uploaded refs -> request parts`
+The asset bank standard defines naming rules and candidate directories.
 
-The legacy slot system is compatibility-only input. It is not the runtime authority anymore.
+## Reference Families
+
+| Family | Schema location | Naming pattern | Active read directories | Current discovered assets |
+| --- | --- | --- | --- | --- |
+| Subject | `entities.subject.reference_id` | `^subject_[0-9]{4}$` | `refs/subjects` | `subject_0002` to `subject_0005` |
+| Garment material detail | `entities.garment.detail_refs.material[]` | `^material_detail_[0-9]{4}$` | `refs/garment_details/material` | none |
+| Garment pattern detail | `entities.garment.detail_refs.pattern[]` | `^pattern_detail_[0-9]{4}$` | `refs/garment_details/pattern` | `pattern_detail_0001` |
+| Footwear | `entities.footwear.asset_id` | `^footwear_[0-9]{4}$` | `refs/accessories/footwear` | `footwear_0001` to `footwear_0003` |
+| Headwear | `entities.headwear.asset_id` | `^headwear_(bandana|hat|headband)_[0-9]{4}$` | `refs/accessories/headwear`, `refs/accessories/hat` | `headwear_bandana_0001` |
+| Eyewear | `entities.accessory.items[].asset_id` | `^sunglasses_[0-9]{4}$` | `refs/accessories/eyewear` | none |
+| Bag | `entities.accessory.items[].asset_id` | `^bag_[0-9]{4}$` | `refs/accessories/bag` | none |
+| Neckwear | `entities.accessory.items[].asset_id` | `^neck_scarf_[0-9]{4}$` | `refs/accessories/neckwear`, `refs/accessories/scarf` | none |
 
 ## Directory Strategy
 
-Current runtime conventions:
+Resolver behavior is directory-first.
 
-- `refs/subjects/<reference_id>/*`
-- `refs/accessories/footwear/<asset_id>/*`
-- `refs/accessories/headwear/<asset_id>/*`
-- `refs/accessories/hat/<asset_id>/*`
-- `refs/accessories/scarf/<asset_id>/*`
+For each candidate base directory:
 
-Forward conventions already prepared by the resolver:
+1. check `<baseDir>/<assetId>/` and load all image files inside it
+2. if that does not exist, check for a flat file in `<baseDir>` whose basename matches `assetId`
 
-- `refs/accessories/eyewear/<asset_id>/*`
-- `refs/accessories/bag/<asset_id>/*`
-- `refs/accessories/neckwear/<asset_id>/*`
-- `refs/garment_details/material/<detail_id>/*`
-- `refs/garment_details/pattern/<detail_id>/*`
+The active upload paths always write directory-style assets, not flat files.
 
-Current repo reality:
+## Upload Paths
 
-- Subject, footwear, and bandana-style headwear references are populated.
-- Hat and scarf fallback directories exist as compatibility paths.
-- Garment detail, eyewear, bag, and neckwear family directories are part of the resolver convention but are not yet fully populated in the current asset bank.
+Subject upload:
 
-## Reference Groups
+- `refs/subjects/<reference_id>/ref_01.<ext>`
 
-### Subject Refs
+Asset upload:
 
-Directory strategy:
+- footwear: `refs/accessories/footwear/<asset_id>/ref_01.<ext>`
+- headwear: `refs/accessories/headwear/<asset_id>/ref_01.<ext>`
+- eyewear: `refs/accessories/eyewear/<asset_id>/ref_01.<ext>`
+- bag: `refs/accessories/bag/<asset_id>/ref_01.<ext>`
+- neckwear: `refs/accessories/neckwear/<asset_id>/ref_01.<ext>`
+- garment material: `refs/garment_details/material/<asset_id>/ref_01.<ext>`
+- garment pattern: `refs/garment_details/pattern/<asset_id>/ref_01.<ext>`
 
-- `refs/subjects/<reference_id>/*`
+## Discovery Model
 
-Behavior:
+`buildOptionRegistry()` starts from `prompt_system/registry/frozenOptions.v1.json` and then overwrites asset lists with live filesystem discovery.
 
-- Subject refs are identity authority.
-- They lock face, body proportions, age impression, skin tone, and hair identity.
-- They do not define garment structure, accessory styling, or scene behavior.
+The live discovery result is what matters at runtime.
 
-### Garment Material Detail Refs
+This means:
 
-Directory strategy:
+- frozen registry content is seed data
+- runtime discovery is authoritative for what is actually resolvable in the checkout
+- docs or sample JSON that mention missing asset ids are stale, even if those ids still appear in the frozen registry
 
-- `refs/garment_details/material/<detail_id>/*`
+## Compatibility-Only Paths
 
-Behavior:
+The asset bank standard still includes older read locations:
 
-- Material refs reinforce texture and fabric fidelity.
-- They help preserve material read, surface character, and fabric behavior.
-- They do not override pose, framing, or garment geometry.
+- `refs/accessories/hat`
+- `refs/accessories/scarf`
 
-### Garment Pattern Detail Refs
+These are read-path compatibility only.
 
-Directory strategy:
+The active upload routes write to:
 
-- `refs/garment_details/pattern/<detail_id>/*`
+- `refs/accessories/headwear`
+- `refs/accessories/neckwear`
 
-Behavior:
+## Noise Filtering
 
-- Pattern refs reinforce scale, density, and pattern geometry.
-- They affect garment fidelity only.
-- They do not alter identity, pose, or scene intent.
+Resolver and discovery code ignore:
 
-### Footwear Refs
+- files starting with `._`
+- `.DS_Store`-style noise because only image extensions are collected
 
-Directory strategy:
+## Current Population Truth
 
-- `refs/accessories/footwear/<asset_id>/*`
+The standard expects 10 top-level asset-bank directories.
 
-Behavior:
+This checkout currently has all 10 expected directories present.
 
-- Footwear refs act as exact design authority only when footwear is in `replace` mode and canonical `source=reference`.
-- Their authority is limited to footwear.
+Population is uneven:
 
-### Headwear Refs
+- subject references are populated
+- footwear is populated
+- bandana headwear is populated
+- garment pattern has one populated asset
+- garment material is empty
+- eyewear, bag, and neckwear families are structurally supported but empty
 
-Directory strategy:
+## Validation Relationship
 
-- Preferred: `refs/accessories/headwear/<asset_id>/*`
-- Compatibility fallback for hat variants: `refs/accessories/hat/<asset_id>/*`
+Validation checks two separate things:
 
-Behavior:
+1. naming compliance against the standard regex
+2. resolvability in the actual candidate directories
 
-- Headwear refs act as exact design authority only when headwear is in `add` or `replace` and canonical `source=reference`.
-- They can influence head styling around the accessory.
-- They must not cause identity drift.
+That distinction matters because a correctly named id can still be unresolved if the asset bank is empty.
 
-### Accessory Family Refs
-
-#### Eyewear
-
-- `refs/accessories/eyewear/<asset_id>/*`
-- Role: styling and design authority for eyewear only when an explicit override mode is active
-
-#### Bag
-
-- `refs/accessories/bag/<asset_id>/*`
-- Role: styling and design authority for bag items only when an explicit override mode is active
-
-#### Neckwear
-
-- Preferred: `refs/accessories/neckwear/<asset_id>/*`
-- Compatibility fallback: `refs/accessories/scarf/<asset_id>/*`
-- Role: styling and design authority for neckwear only when an explicit override mode is active
-
-Accessory behavior:
-
-- Accessory refs are family-based styling references only when accessory mode is `add` or `replace` with canonical `source=reference`.
-- They must not alter garment silhouette.
-- They must not change subject identity.
-
-## Request Injection Order
-
-The current runtime injects references in this order:
-
-1. target image
-2. subject refs
-3. garment material refs
-4. garment pattern refs
-5. footwear refs
-6. headwear refs
-7. accessory refs
-8. final instruction text
-
-This order is intentional. It keeps authority separation stable across identity, garment fidelity, replacement items, and styling accessories.

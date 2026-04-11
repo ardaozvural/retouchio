@@ -1,50 +1,24 @@
 # Codex Task Board
 
-## Done
-- integrate modular prompt compiler into `edit.js`
-- add canonical schema support
-- add entity-driven reference routing
-- create docs memory set
-- create internal job builder UI
-- freeze option registry
-- add asset bank standard
-- add validation panel
-- add save/load jobs
-- add dry batch readiness check
-- add builder-to-batch bridge
-- add batch registry and monitoring layer
-- add batch cancel and batch download support
-- add Asset Manager UI
-- add asset upload + preview
-- add Asset Manager -> Job Builder binding
-- implement fixed bottom execution bar
-- implement styling UX normalization (partial)
-- implement structured tagging system in output review
-- implement batch output isolation + pairing system
-- implement real multi-page UI separation
-- establish Production Flow direction
-- refactor styling into a more decision-based UI
-- isolate Batch Jobs as a standalone review surface
-- unify all major pages under a shared visual system
+## P0
 
-## Ready Next
-- browser-level validation pass
-- final UI interaction refinements
-- prompt engine mapping
-- output/review experience strengthening
+| Task | Outcome | Code area |
+| --- | --- | --- |
+| Align non-subject resolver gating with compiler authority rules | remove compile/runtime ambiguity for footwear, headwear, and accessory refs | `prompt_system/compiler/resolveRefs.js`, `buildPrompt.js`, UI state cleanup |
+| Add staged-run retention and cleanup policy | keep per-run staging auditable without unbounded filesystem growth | `job_builder_server.js`, `staging/runs/*` |
 
-## Later
-- validator integration
-- retry packs
-- output registry
-- production orchestration
-- target/output review workflow hardening
+## P1
 
-## Rules
-- One focused implementation task at a time
-- No runtime redesign unless necessary
-- No Python-first divergence
-- No prompt CMS before engine maturity
-- Asset Manager handles reference ingestion
-- Job Builder handles canonical job state + execution
-- target image management is separate from reference asset management
+| Task | Outcome | Code area |
+| --- | --- | --- |
+| Expose or intentionally hide scene/output/global-negative controls | restore UI-to-canonical parity | `ui/job-builder/*` |
+| Clean stale examples and registry seeds | remove misleading ids and sample payloads | `jobs/*`, `prompt_system/schemas/*`, `prompt_system/registry/*` |
+| Add tests around normalization, resolver, and manifest pairing | protect the active execution spine | `prompt_system/compiler/*` |
+
+## P2
+
+| Task | Outcome | Code area |
+| --- | --- | --- |
+| Decide whether Python validator becomes active or archived | remove architectural ambiguity | `validator/*`, server integration points |
+| Decide whether `prompt_contracts/*` stays experimental or is removed | reduce duplicate system narratives | `prompt_contracts/*` |
+| Implement real approval state if output review is meant to be operational | close the gap between preview and production workflow | `ui/job-builder/*`, `ui/batch-jobs/*`, server APIs |

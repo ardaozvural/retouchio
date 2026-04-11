@@ -1,65 +1,87 @@
 # Migration Log
 
-## Phase 1: Monolithic Prompt Runtime
+This file is reconstructed from code reality, not commit history.
 
-- `edit.js` used a single large prompt path
-- behavior and prompt text were tightly coupled
-- runtime carried too much behavioral knowledge
+## Inferred Evolution
 
-## Phase 2: Legacy Slot System
+## Phase 1: Slot-Era Jobs
 
-- `activeSlots` and `selectedAccessoryAssetIds` became the main input pattern
-- slot-based routing improved runtime control
-- prompt generation and reference routing were still tied to slot logic
+Older jobs used:
 
-## Phase 3: Modular Prompt Compiler
+- top-level `subjectReference`
+- top-level `outputProfile`
+- top-level `activeSlots`
+- top-level `selectedAccessoryAssetIds`
+- entity-level `reference`
+- slot names such as `headwear_bandana`, `footwear`, and `neck_scarf`
 
-- `prompt_system/compiler/buildPrompt.js` became the prompt compiler entry point
-- modular entity compilers were introduced under `prompt_system/modules/*`
-- the canonical job schema became the intended behavioral model
+Proof:
 
-## Phase 4: Entity-Driven Reference Runtime
+- `jobs/job_0001.json`
+- `LEGACY_SLOT_MAP` in `prompt_system/compiler/resolveEntity.js`
+- `applyLegacySlotMapping()` and `applyExistingEntityMapping()`
 
-- `prompt_system/compiler/resolveRefs.js` became the runtime reference resolver
-- runtime request assembly became entity-driven
-- prompt compiler and reference resolver now operate on canonical entities
+## Phase 2: Canonical v2 Normalization Layer
 
-## Current State
+The repo introduced canonical `version: "2"` jobs with entity blocks under `entities`.
 
-- Prompt generation is modular.
-- The canonical job schema is the source of behavioral truth.
-- Reference routing is entity-driven.
-- `edit.js` is the stable runtime runner.
-- `batch_poll_download.js` remains the post-submit poll/download path.
+Normalization now translates older shapes into canonical fields.
 
-## Compatibility Layer
+Proof:
 
-Compatibility is still handled through normalization.
+- `normalizeJob()` in `resolveEntity.js`
+- `schemaConstants.js`
+- `jobs/job_0001.canonical.json`
+- `prompt_system/schemas/canonicalJob.example.json`
 
-- Legacy slot-shaped input is accepted.
-- `resolveEntity.js` maps legacy slot input into canonical entities.
-- Runtime execution happens only after normalization.
-- Legacy slot fields remain only as compatibility input for normalization.
+## Phase 3: Modular Compiler and Runtime Discovery
 
-## Legacy Slot System Status
+The active system compiles prompt sections through modular JavaScript compilers and discovers real assets from the filesystem.
 
-The legacy slot system still exists, but only as compatibility input.
+Proof:
 
-It is not:
+- `buildPrompt()`
+- `prompt_system/modules/*`
+- `buildOptionRegistry()`
+- `assetBankStandard.v1.json`
 
-- the runtime authority
-- the reference routing authority
-- the long-term schema target
+## What Still Survives from the Old System
 
-Residue still visible in compatibility fields:
+Read-path or normalization compatibility still exists for:
 
-- `activeSlots`
-- `selectedAccessoryAssetIds`
+- slot activation
+- old top-level fields
+- legacy entity `reference` fields
 - `slot_key`
+- `asset_ids` and `reference_ids`
+- no-arg legacy mode in `edit.js`
+- flat `batch_output/` read fallback
 
-## Next Milestone
+## What Is No Longer the Active Center
 
-- freeze canonical schema
-- freeze reference directory strategy
-- connect UI to canonical job construction
-- keep validator work as a later integration step
+These systems exist, but they are not the active runtime spine:
+
+- `prompt_contracts/*` Python prompt contract resolver
+- `validator/*` Python shape validator
+- top-level `validator` config block inside old jobs
+
+No traced Node runtime import path calls into `prompt_contracts`.
+
+No compile, dry-check, or run server endpoint invokes the Python validator.
+
+## Compatibility Limits
+
+Legacy support is partial, not complete.
+
+Examples:
+
+- `jobs/job_0001.json` still normalizes toward canonical intent, but it fails dry-check in this checkout because it points at missing `subject_0001`.
+- validation still inspects the submitted job shape, so older incomplete shapes can fail before normalized behavior is fully helpful.
+
+## Current Migration Residue Worth Fixing
+
+- stale examples still mention missing asset ids
+- frozen registry still includes asset ids not present in the live asset bank
+- visible UI no longer exposes every canonical field even though the compiler still supports them
+- resolver behavior for non-subject refs is looser than compiler authority semantics
+

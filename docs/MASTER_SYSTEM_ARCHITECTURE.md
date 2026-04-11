@@ -1,114 +1,93 @@
 # Master System Architecture
 
-## Core Principle
+## Single-Source Synthesis
 
-The system is designed around deterministic control over generative behavior.
+The active system is a local Retouchio batch-editing stack whose behavioral center is canonical job schema `version: "2"` and whose operational center is a Node HTTP server plus `edit.js`.
 
-Behavior is decided before runtime execution, not improvised during request submission.
+## End-to-End Spine
 
-## Spine
+1. The user edits state in Production Flow or submits a job payload directly to the server.
+2. The server merges defaults and validates against the live discovered registry and asset bank standard.
+3. The compiler normalizes the job into canonical v2 and emits a prompt from ordered entity modules.
+4. The resolver loads reference files from `refs/`.
+5. The server stages selected target inputs into `staging/runs/<runId>__<attemptId>/inputs/` and writes a runtime job file that points `edit.js` at that staged snapshot.
+6. `edit.js` uploads refs and staged target inputs, writes JSONL, and submits a Gemini batch.
+7. The server and CLI utilities monitor, cancel, and download batch results.
+8. Outputs are saved to `batch_output/<safeBatchName>/`, paired back to original and staged inputs through manifests, and persisted as reviewable output records.
+9. Approve, reject, and retry operate on persisted `runId`, `attemptId`, and `outputId` state.
 
-The active system follows this spine:
+## Active Components
 
-`job config -> normalize + validate -> compiler -> resolver -> runtime runner`
+Behavioral:
 
-Operational roles:
+- `prompt_system/compiler/resolveEntity.js`
+- `prompt_system/compiler/validateCanonicalJob.js`
+- `prompt_system/compiler/buildPrompt.js`
+- `prompt_system/modules/*`
+- `prompt_system/compiler/resolveRefs.js`
 
-- job config is the behavioral center
-- normalization resolves compatibility inputs into canonical entity state
-- validation gates dry check and run execution
-- compiler produces the final prompt sections and output config
-- resolver loads runtime reference files from canonical entities
-- runtime runner applies compiled decisions to the batch payload
+Operational:
 
-## Behavioral Center
+- `job_builder_server.js`
+- `edit.js`
+- `batch_poll_download.js`
+- `prompt_system/compiler/batchRegistry.js`
+- `prompt_system/compiler/batchOutputPaths.js`
+- `prompt_system/compiler/jobPersistence.js`
 
-The canonical job schema is the source of behavioral truth.
+UI:
 
-It defines:
+- `/job-builder`
+- `/asset-manager`
+- `/input-manager`
+- `/batch-jobs`
 
-- entity behavior
-- reference authority inputs
-- scene and output profile behavior
-- global negative rules
-- subject identity, face refinement, and pose refinement behavior
+Job Builder surface split:
 
-The legacy slot system is not the primary architecture. It remains compatibility input for normalization.
+- primary visible authoring: input source, subject, garment detail refs, primary styling slots
+- advanced visible authoring: scene, output profile, global negative rules, extra accessory rows, save/load/sample/reset, inspect shortcuts
+- UI-only state: workflow presets, panel open state, inspect tab state, compare mode
 
-The default global base prompt is still a strict cleanup layer, but subject-aware rewrites are now applied during compilation.
+## Behavioral Truths
 
-- no uncontrolled redesign
-- no accessory injection unless an active entity requests it
-- pose behavior is conditioned by the active subject refinement level
-- styling additions belong to entity or preset layers, not the base layer
+- canonical schema is the active source of behavioral truth
+- module order is fixed and meaningful
+- output profile selects runtime `imageConfig`
+- scene/output/global-negative entities are real compile layers and now live in the visible advanced authoring section
+- subject reference authority is active only when `source === "reference"` and `reference_id` exists
+- footwear, headwear, and accessory item reference authority now use the same shared gate across compiler, resolver, and request assembly
 
-## Subject Control Model
+## Operational Truths
 
-The active canonical subject schema is:
+- persistence is filesystem-only
+- there is no database
+- one server process handles both UI and APIs
+- one in-memory lock guards `run-batch`
+- server-backed runs stage inputs per run instead of moving source files
+- run lineage is file-backed as `job -> run -> attempt -> output`
+- review decisions are server-persisted in `data/batches/registry.json`
 
-- `mode`: `preserve` | `transfer_identity`
-- `source`: `system` | `reference`
-- `reference_id` / `reference_ids`
-- `face_refinement`: `preserve` | `light` | `pro`
-- `pose_refinement`: `preserve` | `light` | `pro`
+## Legacy Truths
 
-Compiler behavior:
+Still present:
 
-- subject instructions compile in fixed order: identity -> face refinement -> pose refinement
-- `transfer_identity` makes the uploaded subject reference the facial identity authority
-- `preserve` keeps the target image as the subject identity authority
-- subject references in `preserve` mode are supporting-only, not replacement identity authority
-- core rules and global negative rules are conditioned by subject mode instead of staying static
+- slot-era field normalization
+- flat `batch_output` read fallback
+- old job examples
+- Python `validator/`
+- Python `prompt_contracts/`
 
-## Runtime Model
+Not active in the main Node execution spine:
 
-The runtime runner is `edit.js`.
+- `validator/*`
+- `prompt_contracts/*`
 
-Its job is operational, not interpretive:
+## Most Important Risks
 
-- load job
-- compile prompt
-- resolve references
-- upload target and refs
-- assemble request parts
-- write JSONL
-- submit batch
-- hand off polling and download
-
-Runtime rule:
-
-> The runtime runner applies compiled decisions. It does not invent behavior.
-
-## Reference Model
-
-The active reference model is entity-driven.
-
-Reference authority is resolved from canonical entities, then injected into the runtime payload in a stable order.
-
-Primary reference roles:
-
-- in `transfer_identity`, subject reference = facial identity authority
-- target image remains body, pose class, framing, garment, and scene continuity authority
-- in `preserve`, target image = subject identity authority and subject refs are supporting-only
-- garment detail references = material, texture, pattern, and close-up fidelity authority
-- footwear references = footwear design authority
-- headwear references = headwear design authority
-- accessory references = scoped item design authority only, never identity authority
-
-## Validator Position
-
-Validator logic is an active gate in dry check and run preparation.
-
-It is still not the primary behavioral brain of the system; canonical job state and compiler decisions remain primary.
-
-## Production Truth
-
-Current production truth:
-
-- modular prompt compiler is active
-- canonical job schema is active
-- canonical validation is active in dry check and run preparation
-- entity-driven reference resolver is active
-- stable batch runner is active
-- legacy slot handling is compatibility-only
-- higher-level output registry, retry flow, and orchestration are not yet present
+- staged run directories will accumulate without retention or cleanup rules
+- internal mirror controls still exist behind some visible shells
+- stale examples and frozen registry seeds
+- direct manual CLI execution can still bypass server-side staging
+- weak key pairing when filename stems collide
+- stale reference fields still exist in older payloads, but they are now stripped and surfaced via authority warnings
+- retry history is file-backed, but fully live retry still depends on successful Gemini submission

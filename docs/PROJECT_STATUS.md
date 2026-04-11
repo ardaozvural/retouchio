@@ -1,30 +1,54 @@
 # Project Status
 
-## Completed
-- Active execution spine is `job config -> normalize + validate -> buildPrompt -> resolveRefs -> edit.js`.
-- Main execution flow validates canonical jobs before compile/run via `job_builder_server.js` and `prompt_system/compiler/validateCanonicalJob.js`.
-- Dry batch readiness check validates the job, compiles the prompt, resolves references, and verifies the input source via `prompt_system/compiler/dryBatchCheck.js`.
-- Canonical job schema remains the behavioral source of truth for compiler and runtime decisions.
-- Subject control refactor is active in the canonical schema with `mode`, `source`, `reference_id`, `reference_ids`, `face_refinement`, and `pose_refinement`.
-- Subject prompt compilation is active as three ordered blocks: identity -> face refinement -> pose refinement.
-- `transfer_identity` semantics are enforced across `prompt_system/modules/subject.js`, `prompt_system/modules/core.js`, `prompt_system/modules/global_negative_rules.js`, and `prompt_system/compiler/buildPrompt.js`.
-- `preserve` mode keeps target identity authority; subject references remain supporting-only instead of replacement identity authority.
-- `transfer_identity` mode treats the uploaded subject reference as facial identity authority while keeping target-led body, skin continuity, hair continuity, pose direction, framing, garment continuity, and scene continuity.
-- Entity-driven reference resolution remains active for subject, garment detail, footwear, headwear, and accessory references.
-- Internal multi-page UI is active across `/job-builder`, `/asset-manager`, `/input-manager`, and `/batch-jobs`, with shared shell/navigation.
-- Compile preview, canonical JSON preview, dry check, batch monitor, review tagging, and batch-scoped output storage are present in the repo.
+## Present Reality
 
-## In Progress
-- Legacy subject compatibility reads are still active in normalization and UI hydration for old values such as `replace`, `lock`, and `ignore`.
-- Subject control cleanup is not fully finished at stylesheet level; `ui/job-builder/styles.css` still contains `.model-constraints-*` residue even though the user-facing constraints control has been removed.
+This repository is currently a working local Retouchio batch-editing stack with:
 
-## Blocked
-- There is no separate output registry implementation in the current compiler/runtime path; the repo currently exposes `batchRegistry` plus filesystem output folders instead.
-- There is no retry-pack flow for failed batch outcomes in the repo.
-- There is no production orchestration layer beyond the current `job_builder_server.js` plus `edit.js` batch flow.
+- a Node HTTP server
+- a canonical v2 job model
+- a modular JavaScript prompt compiler
+- a filesystem-discovered asset bank
+- Gemini batch submission and download
+- a multi-page UI for authoring, asset management, input management, and batch review
 
-## Next
-- Add compiler regression coverage for subject `preserve` vs `transfer_identity` prompt output and authority binding behavior.
-- Remove remaining legacy subject compatibility branches after saved jobs no longer require old subject values.
-- Remove unused `.model-constraints-*` stylesheet residue left behind by the old subject constraints UI.
-- Implement the missing output registry, retry flow, and higher-level production orchestration only after the current compiler path is considered stable.
+## What Is Actually Working
+
+- compile from canonical or mixed job payloads
+- dry-check against live asset and input directories
+- save generated canonical jobs
+- submit Gemini batches through `edit.js`
+- stage per-run input snapshots before server-backed execution
+- track batch status in local registry JSON
+- download outputs into per-batch directories
+- pair outputs back to inputs using manifests and request keys
+- persist output review state as `in_review`, `approved`, or `rejected`
+- mark one final output per `(runId, requestKey)`
+- retry from an existing run or request key into a new attempt without overwriting older outputs
+- manage references and input sets through dedicated UIs
+
+## What Is Only Partially Working
+
+- full asset-bank coverage across all supported families
+- thinner internal UI state shape behind visible Job Builder shells
+- broader review workflow beyond approve / reject / retry
+- end-to-end retry verification against a live Gemini batch account in this checkout
+
+## What Is Not True Yet
+
+- there is no database-backed persistence layer
+- there is no integrated validator step in compile or run
+- there is no trustworthy multi-user or multi-run orchestration layer
+- there is no committed Python dependency manifest for `validator/`, and `python3 -m validator.tests.synthetic_tests` currently fails without `numpy`
+
+## Biggest Drift Corrected by This Audit
+
+- code is Retouchio-first, not an actively branded RenderForge runtime
+- `package.json` is still named `nanobanana-test`, which is naming drift rather than current product truth
+- canonical v2 is the active system center
+- Batch Jobs is a separate page, not a sub-view inside Job Builder
+- the supported Job Builder surface now shows primary and advanced compile-active controls explicitly, while remaining hidden fields act only as backing mirrors or legacy residue
+- Phase 1 now makes non-subject reference authority deterministic across compiler, resolver, and request assembly
+- missing non-subject `source` now defaults to `system`, so stale asset-only payloads no longer activate refs
+- Phase 2 now makes the default server-backed input lifecycle non-destructive by staging inputs per run instead of moving source files
+- Phase 3 now surfaces supported compile-active Job Builder fields as either primary-visible or advanced-visible controls, and removes raw `garment.mode` and top-level `accessory.mode` from direct authoring
+- Phase 4 now turns outputs into a real file-backed decision workflow with explicit run, attempt, output, review, final-selection, and retry behavior

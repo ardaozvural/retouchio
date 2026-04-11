@@ -1,322 +1,302 @@
-# Canonical Job Schema
+# Canonical Schema
 
-## Purpose
+## Canonical Center
 
-The canonical job schema is the single source of behavioral truth for the active system.
+The active behavioral schema is canonical job `version: "2"`.
 
-It defines:
-
-- prompt behavior
-- entity intent
-- reference routing inputs
-- output profile selection
-
-The runtime runner does not define behavior on its own. It executes the compiled result of the canonical job.
-
-## Top-Level Structure
+Normalization always returns this shape:
 
 ```json
 {
   "version": "2",
-  "jobId": "job_0001",
-  "displayName": "retouchio-example-job",
-  "inputSource": "batch_input",
-  "entities": {}
-}
-```
-
-## Top-Level Fields
-
-| Field | Purpose |
-| --- | --- |
-| `version` | Schema version. Current canonical version is `2`. |
-| `jobId` | Stable job identifier. |
-| `displayName` | Human-readable runtime label. |
-| `inputSource` | Input directory used by the runtime runner. |
-| `entities` | Behavioral center of the job. |
-
-## Entity List
-
-The active canonical entity set is:
-
-- `subject`
-- `garment`
-- `footwear`
-- `headwear`
-- `accessory`
-- `scene`
-- `output_profile`
-- `global_negative_rules`
-
-## Mode Semantics
-
-`mode` always describes behavior.
-
-Allowed active semantics:
-
-| Entity | Allowed Modes |
-| --- | --- |
-| `subject` | `preserve`, `ignore` |
-| `garment` | `preserve`, `restyle`, `ignore` |
-| `footwear` | `preserve`, `replace`, `remove` (`ignore` tolerated for legacy jobs) |
-| `headwear` | `preserve`, `add`, `replace`, `remove` (`ignore` tolerated for legacy jobs) |
-| `accessory` | `apply`, `ignore` |
-| `accessory.items[*]` | `preserve`, `add`, `replace`, `remove` (`ignore` tolerated for legacy jobs) |
-| `scene` | `apply`, `preserve`, `ignore` |
-| `output_profile` | `apply`, `ignore` |
-| `global_negative_rules` | `apply`, `ignore` |
-
-Mode rules:
-
-- `mode` is behavior only.
-- `variant` is subtype selection.
-- `profile` is named profile selection.
-- `asset_id` points to a reference asset.
-- `source` records whether an entity/item should use a reference asset as visual authority or allow system selection.
-- `placement` records worn/use-context intent that the compiler must preserve.
-- `reference_id` points to an authority reference such as subject identity.
-- `items` is used for multi-item groups such as accessories.
-
-## Key Fields
-
-| Field | Meaning |
-| --- | --- |
-| `mode` | Behavioral action for the entity. |
-| `variant` | Entity subtype or product subtype. |
-| `source` | Canonical intent for `reference` vs `system` authority selection. |
-| `placement` | Canonical intent for worn/use placement context. |
-| `asset_id` | Primary reference asset identifier. |
-| `asset_ids` | Optional multi-asset compatibility field. |
-| `reference_id` | Primary identity or authority reference identifier. |
-| `reference_ids` | Optional multi-reference compatibility field. |
-| `profile` | Named configuration profile. |
-| `items` | Multi-item list, used primarily by `accessory`. |
-| `detail_refs` | Optional garment fidelity references. |
-| `slot_key` | Compatibility-only residue from the legacy slot system. Not primary architecture. |
-
-## Canonical Example
-
-```json
-{
-  "version": "2",
-  "jobId": "job_0001",
-  "displayName": "retouchio-bandana-footwear-job-0001",
-  "inputSource": "batch_input",
+  "jobId": "string",
+  "displayName": "string",
+  "inputSource": "batch_input or inputs/sets/<id>",
   "entities": {
-    "subject": {
-      "mode": "preserve",
-      "variant": "identity_reference",
-      "reference_id": "subject_0001"
-    },
-    "garment": {
-      "mode": "preserve",
-      "variant": "source_garment",
-      "detail_refs": {
-        "material": [],
-        "pattern": []
-      }
-    },
-    "footwear": {
-      "mode": "replace",
-      "source": "reference",
-      "placement": "on_feet",
-      "variant": "sandal",
-      "asset_id": "footwear_0001"
-    },
-    "headwear": {
-      "mode": "add",
-      "source": "reference",
-      "placement": "on_head",
-      "variant": "bandana",
-      "asset_id": "headwear_bandana_0001"
-    },
-    "accessory": {
-      "mode": "apply",
-      "items": [
-        {
-          "family": "eyewear",
-          "variant": "sunglasses",
-          "mode": "add",
-          "source": "reference",
-          "placement": "on_eyes",
-          "asset_id": "sunglasses_0001"
-        },
-        {
-          "family": "bag",
-          "variant": "hand_bag",
-          "mode": "add",
-          "source": "reference",
-          "placement": "on_shoulder",
-          "asset_id": "bag_0003"
-        },
-        {
-          "family": "neckwear",
-          "variant": "neck_scarf",
-          "mode": "add",
-          "source": "system",
-          "placement": "auto",
-          "asset_id": "neck_scarf_0001"
-        }
-      ]
-    },
-    "scene": {
-      "mode": "apply",
-      "profile": "studio_catalog"
-    },
-    "output_profile": {
-      "mode": "apply",
-      "profile": "catalog_4x5_2k"
-    },
-    "global_negative_rules": {
-      "mode": "apply",
-      "items": []
-    }
+    "subject": {},
+    "garment": {},
+    "footwear": {},
+    "headwear": {},
+    "accessory": {},
+    "scene": {},
+    "output_profile": {},
+    "global_negative_rules": {}
+  },
+  "meta": {
+    "source_format": "mixed or legacy_slots",
+    "legacy_active_slots": []
   }
 }
 ```
 
-## Field Meanings
+Top-level frozen fields are defined in `prompt_system/compiler/schemaConstants.js`.
 
-### `subject`
+Allowed top-level fields:
 
-- Primary role: identity authority
-- Typical shape:
+- `version`
+- `jobId`
+- `displayName`
+- `inputSource`
+- `entities`
+- `meta`
+
+Anything else is warning-only compatibility residue.
+
+## Active Entities
+
+| Entity | Supported modes | Compile-active fields | Runtime-active fields | Notes |
+| --- | --- | --- | --- | --- |
+| `subject` | `preserve`, `transfer_identity` | `mode`, `source`, `reference_id`, `face_refinement`, `pose_refinement` | `reference_id` only resolves when `source === "reference"` | Subject is the only entity where compiler and resolver both gate on `source`. |
+| `garment` | `preserve`, `restyle`, `ignore` | `mode`, `refinement_level`, `detail_refs.material`, `detail_refs.pattern` | `detail_refs.*` always resolve if present | Visible UI uses `refinement_level`; normalized output usually keeps `mode: "preserve"` unless explicitly ignored. |
+| `footwear` | `preserve`, `replace`, `remove`, `ignore` | `mode`, `source`, `placement`, `variant`, `asset_id` | `asset_id` resolves whenever `mode !== "ignore"` and `asset_id` exists | Resolver does not check `source`. |
+| `headwear` | `preserve`, `add`, `replace`, `remove`, `ignore` | `mode`, `source`, `placement`, `variant`, `asset_id` | `asset_id` resolves whenever mode is not `ignore` or `remove` and `asset_id` exists | Resolver does not check `source`. |
+| `accessory` | `apply`, `ignore` | `mode`, `items[]` | `items[]` | Item-level behavior matters more than entity-level mode. |
+| `scene` | `apply`, `preserve`, `ignore` | `mode`, `profile`, `rules` | none | Compile-only scene instructions. |
+| `output_profile` | `apply`, `ignore` | `mode`, `profile` | `profile` also selects `imageConfig` | Runtime uses `imageConfig` from the compiled result. |
+| `global_negative_rules` | `apply`, `ignore` | `mode`, `items[]` | none | Compile-only negative rule append. |
+
+Accessory item modes:
+
+- `preserve`
+- `add`
+- `replace`
+- `remove`
+- `ignore`
+
+## Subject Semantics
+
+Canonical subject defaults:
 
 ```json
 {
   "mode": "preserve",
-  "reference_id": "subject_0001"
+  "source": "system",
+  "variant": "identity_reference",
+  "reference_id": null,
+  "reference_ids": [],
+  "face_refinement": "preserve",
+  "pose_refinement": "preserve"
 }
 ```
 
-### `garment`
+Behavior:
 
-- Primary role: preserve garment authority from the target image
-- Optional detail references reinforce fidelity only
+- `transfer_identity` forces `source` to `reference`.
+- `reference_id` is required when `mode` is `transfer_identity`.
+- `source: reference` without `reference_id` is invalid.
+- In `preserve` mode, subject refs are support-only according to the prompt.
+
+Supported refinement levels:
+
+- `preserve`
+- `light`
+- `pro`
+
+## Garment Semantics
+
+Canonical garment defaults:
 
 ```json
 {
   "mode": "preserve",
+  "refinement_level": "preserve",
+  "variant": "source_garment",
   "detail_refs": {
-    "material": ["material_detail_0001"],
-    "pattern": ["pattern_detail_0001"]
+    "material": [],
+    "pattern": []
   }
 }
 ```
 
-### `footwear`
+Important code truth:
 
-- `preserve` means stay loyal to the footwear state already present in the target image
-- `replace` means the uploaded footwear reference can become override authority when `source = reference`
-- `remove` means explicitly remove footwear
-- `source` is canonical authority intent: `reference` means the footwear ref is the visual authority only for explicit override modes; `system` means the compiler should not treat the asset as authority
-- `placement` defaults to `on_feet`
+- `normalizeSemanticModes()` converts legacy `clean` into `mode: "preserve"` plus `refinement_level: "minimal"`.
+- It converts legacy `restyle` into `mode: "preserve"` plus `refinement_level: "repair"` unless already specified.
+- The visible Job Builder product control is effectively an intent switch for `refinement_level`, not a real redesign mode.
+
+Current garment behavior is therefore:
+
+- `ignore`: no garment module output
+- `preserve + preserve`: lock garment with no extra cleanup authority
+- `preserve + minimal`: light product-safe cleanup
+- `preserve + repair`: stronger product-faithful correction
+
+## Footwear Semantics
+
+Canonical footwear defaults:
 
 ```json
 {
-  "mode": "replace",
-  "source": "reference",
+  "mode": "ignore",
+  "variant": null,
+  "source": "system",
   "placement": "on_feet",
-  "variant": "sandal",
-  "asset_id": "footwear_0001"
+  "asset_id": null,
+  "asset_ids": [],
+  "slot_key": null
 }
 ```
 
-### `headwear`
+Validation rules:
 
-- `preserve` means stay loyal to the original target-image headwear state
-- `add` and `replace` are the only modes that can activate uploaded headwear reference authority
-- `remove` explicitly removes headwear
-- `source` persists whether the headwear ref should be treated as authority in an explicit override mode
-- `placement` defaults to `auto` and may be promoted to explicit `on_head`
+- `replace` requires `asset_id` or `variant`
+- `remove` must not carry `asset_id`
+- `preserve` with `asset_id` is warning-only, not hard error
+
+Compile truth:
+
+- `replace` can emit slot-rule reference language if `asset_id` exists
+- `preserve` and `remove` do not use reference slot rules
+
+Runtime truth:
+
+- any non-ignored footwear entity with `asset_id` triggers reference resolution, even if `source` is `system`
+
+## Headwear Semantics
+
+Canonical headwear defaults:
 
 ```json
 {
-  "mode": "add",
-  "source": "reference",
-  "placement": "on_head",
-  "variant": "bandana",
-  "asset_id": "headwear_bandana_0001"
+  "mode": "ignore",
+  "variant": null,
+  "source": "system",
+  "placement": "auto",
+  "asset_id": null,
+  "asset_ids": [],
+  "slot_key": null
 }
 ```
 
-### `accessory`
+Validation rules:
 
-- Holds multi-item accessory intent
-- Each item carries its own behavior
-- `preserve` means stay loyal to the target-image state for that accessory family
-- `add` and `replace` are the only modes that can activate uploaded accessory authority
-- `remove` explicitly removes the accessory family item
-- Each item may persist `source` and `placement` independently
-- `reference` means visual authority plus use-context instructions
-- `system` keeps authority open while still preserving placement intent when set
+- `add` and `replace` warn if both `asset_id` and `variant` are empty
+- `remove` must not carry `asset_id`
+- `preserve` with `asset_id` is warning-only
 
-```json
-{
-  "mode": "apply",
-  "items": [
-    {
-      "family": "eyewear",
-      "variant": "sunglasses",
-      "mode": "add",
-      "source": "reference",
-      "placement": "on_eyes",
-      "asset_id": "sunglasses_0001"
-    }
-  ]
-}
-```
+Runtime truth:
 
-## Intent Defaults
+- any headwear entity with mode not `ignore` or `remove` and with `asset_id` will resolve reference files, regardless of `source`
 
-- `footwear.source` defaults to `reference` when a footwear asset is active for a reference-using mode; otherwise `system`
-- `footwear.placement` defaults to `on_feet`
-- `headwear.source` defaults to `reference` when add/replace has an asset; otherwise `system`
-- `headwear.placement` defaults to `auto`
-- `accessory.items[*].source` defaults to `reference` when add/replace has an asset; otherwise `system`
-- `accessory.items[*].placement` defaults to `auto`
+## Accessory Semantics
 
-## Intent Semantics
-
-- `source = reference` means the compiler must treat the referenced asset as visual authority, include its resolved reference images, and pair that authority with the requested use context.
-- `source = system` means the compiler should not overstate reference authority, even if compatibility data still contains an asset id.
-- `preserve` means loyalty to the target image slot state, not uploaded reference authority.
-- Uploaded slot authority only activates in explicit override modes such as `replace` or `add`.
-- `placement` is canonical runtime intent, not a temporary UI draft field.
-- Production Flow now persists these decisions into the canonical job instead of losing them between UI state and compiler state.
-- `ignore` remains tolerated only for legacy compatibility and is no longer a user-facing styling mode in Production Flow.
-
-### `scene`
-
-- Applies scene behavior through a named profile
+Canonical accessory defaults:
 
 ```json
 {
   "mode": "apply",
-  "profile": "studio_catalog"
+  "items": []
 }
 ```
 
-### `output_profile`
+Each item is family-scoped.
 
-- Selects image profile and output sizing behavior
+Current families from the active registry model:
 
-```json
-{
-  "mode": "apply",
-  "profile": "catalog_4x5_2k"
-}
-```
+- `eyewear`
+- `bag`
+- `neckwear`
 
-### `global_negative_rules`
+Current variants from registry:
 
-- Carries reusable negative constraints
+- eyewear: `sunglasses`
+- bag: `hand_bag`
+- neckwear: `neck_scarf`
 
-```json
-{
-  "mode": "apply",
-  "items": [
-    "Do not add unrelated props or extra people."
-  ]
-}
-```
+Runtime truth:
+
+- item refs resolve whenever item `mode` is not `ignore` or `remove` and `asset_id` exists
+- resolver does not check `source`
+
+## Scene, Output Profile, and Global Negative Rules
+
+Scene:
+
+- Active profile discovered in code: `studio_catalog`
+- `apply` emits studio background rules
+- `preserve` keeps original scene family
+
+Output profile:
+
+- Active discovered profiles in this checkout: `catalog_4x5_2k`, `catalog_square_2k`
+- Compile output selects `imageConfig`
+- Runtime falls back to `4:5` and `2K` if `imageConfig` is absent
+
+Global negative rules:
+
+- built-in fail rules always compile when mode is `apply`
+- custom `items[]` are appended verbatim
+
+## Compile-Active Stable Field Names
+
+`schemaConstants.js` defines these as stable field names:
+
+- `version`
+- `jobId`
+- `displayName`
+- `inputSource`
+- `entities`
+- `mode`
+- `variant`
+- `source`
+- `placement`
+- `asset_id`
+- `reference_id`
+- `reference_ids`
+- `profile`
+- `items`
+- `detail_refs`
+- `refinement_level`
+- `face_refinement`
+- `pose_refinement`
+
+## Compatibility Residue Still Accepted by Normalization
+
+These are not the canonical center, but the code still reads them.
+
+| Field or pattern | Where it appears | Current role |
+| --- | --- | --- |
+| `subjectReference` | top level | mapped into `entities.subject.reference_id` |
+| `outputProfile` | top level | mapped into `entities.output_profile.profile` |
+| `activeSlots` | top level | legacy slot activation |
+| `selectedAccessoryAssetIds` | top level | legacy slot asset binding |
+| `reference` | legacy entity field | mapped to `asset_id` or `reference_id` in some entity branches |
+| `slot_key` | footwear/headwear/accessory item | compatibility-only naming hook for slot rules |
+| `asset_ids`, `reference_ids` | canonical/legacy mixed | arrays collapsed to primary `asset_id` or `reference_id` |
+| `validator` | top level legacy job field | ignored by active Node runtime |
+
+Important limit:
+
+Compatibility support is not full production support. Validation still runs on the submitted job shape before normalization side effects become visible in runtime behavior.
+
+## Validation Truth
+
+`validateCanonicalJob()` checks the submitted job against:
+
+- frozen schema version and entity modes
+- discovered runtime registry
+- asset bank naming standard
+- asset existence in candidate directories
+
+It returns:
+
+- `errors`
+- `warnings`
+- `futureHooks`
+
+`futureHooks` are placeholders only. They do not perform real drift detection or shape validation yet.
+
+## Current Runtime Discovery Snapshot
+
+This checkout currently resolves the following active options through `buildOptionRegistry()`:
+
+- subject references: `subject_0002`, `subject_0003`, `subject_0004`, `subject_0005`
+- garment material refs: none discovered
+- garment pattern refs: `pattern_detail_0001`
+- footwear assets: `footwear_0001`, `footwear_0002`, `footwear_0003`
+- headwear assets: `headwear_bandana_0001`
+- accessory assets: none discovered for eyewear, bag, or neckwear
+- output profiles: `catalog_4x5_2k`, `catalog_square_2k`
+
+This means the canonical schema supports more combinations than the current asset bank can actually satisfy.
+

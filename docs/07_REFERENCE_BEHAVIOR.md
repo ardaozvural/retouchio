@@ -1,59 +1,141 @@
 # Reference Behavior
 
-## Reference Types
+## Current Contract
 
-- target image
-- subject references
-- garment material detail references
-- garment pattern detail references
-- footwear references
-- headwear references
-- accessory family references
+Reference authority is now decided by one shared layer: `prompt_system/compiler/referenceAuthority.js`.
 
-## Reference Roles
+Both the compiler and the resolver use that same decision result.
 
-- Target image: garment structure, pose class, and framing authority
-- Subject refs: identity authority
-- Garment material refs: fabric and material fidelity authority
-- Garment pattern refs: pattern scale, density, and geometry authority
-- Footwear refs: exact design authority only when `mode=replace` and canonical `source=reference`
-- Headwear refs: exact design authority only when `mode=add` or `mode=replace` and canonical `source=reference`
-- Accessory refs: family-based styling authority only when `mode=add` or `mode=replace` and canonical `source=reference`
+That shared layer exports an inspectable authority block with:
 
-## Source And Placement Intent
+- `active_entities`
+- `active_reference_authorities`
+- `stripped_reference_fields`
+- `runtime_expected_uploads`
+- `authority_warnings`
 
-- `source` is now persisted canonical intent, not temporary UI state.
-- `source=reference` means the compiler must include the resolved reference image and treat it as visual authority for that entity/item.
-- `source=system` means the compiler should not overstate reference authority, even if compatibility data still contains an asset id.
-- `preserve` means stay loyal to the original target-image slot state and must not activate uploaded slot authority.
-- `placement` is now persisted canonical intent and must be carried into prompt language as use-context behavior.
-- Example: `bag + source=reference + placement=on_shoulder` means the bag reference is design authority and the bag should be carried naturally on the shoulder.
+## Subject
 
-## Priority Rules
+Subject references are active only when:
 
-- Subject identity authority outranks all style references.
-- The target image remains garment structure authority unless a future garment replacement model explicitly changes that rule.
-- Garment structure cannot be overridden by accessories.
-- Garment material and pattern refs affect garment fidelity only.
-- Footwear `replace` mode activates footwear authority.
-- Headwear and accessory authority activate only in explicit override modes.
-- Accessory refs cannot alter garment silhouette.
-- Headwear may affect head styling, but it must not introduce identity drift.
+- `entities.subject.source === "reference"`
+- `entities.subject.reference_id` exists after normalization
 
-## Conflict Resolution
+When active:
 
-Use this precedence when signals conflict:
+- `preserve` mode treats subject refs as supporting consistency references
+- `transfer_identity` treats the subject ref as facial identity authority
+- resolver uploads the subject ref
+- request assembly includes the subject ref
 
-1. subject identity authority
-2. target image for garment structure, pose class, and framing
-3. garment material and pattern fidelity references
-4. active replacement authorities such as footwear or headwear
-5. accessory styling references
+When inactive:
 
-Operational rules:
+- compiler strips `reference_id` and `reference_ids` from the compiler-side job
+- resolver uploads nothing
+- request assembly includes nothing
 
-- Identity beats styling.
-- Geometry beats styling.
-- Garment fidelity beats accessory spillover.
-- Accessory detail can refine its own item, but it cannot rewrite the garment or the person.
-- Headwear can affect local head styling, but not face identity.
+If `transfer_identity` is requested without an active subject reference, the authority report emits a warning and the compiler falls back to preserve behavior.
+
+## Garment Detail Refs
+
+Garment detail refs are direct listed fidelity refs. They do not use a `source` field.
+
+Material refs are active only when:
+
+- `entities.garment.mode !== "ignore"`
+- `entities.garment.detail_refs.material[]` contains ids
+
+Pattern refs are active only when:
+
+- `entities.garment.mode !== "ignore"`
+- `entities.garment.detail_refs.pattern[]` contains ids
+
+When garment mode is `ignore`, garment detail refs are stripped from compiler-side behavior and skipped by the resolver/runtime path.
+
+## Footwear
+
+Footwear reference authority is active only when all of these are true:
+
+- `entities.footwear.mode === "replace"`
+- `entities.footwear.source === "reference"`
+- `entities.footwear.asset_id` exists after normalization
+
+If `source` is missing, normalization now defaults footwear to `system`. `asset_id` alone does not upgrade footwear into reference authority.
+
+When active:
+
+- the compiler keeps footwear reference authority
+- footwear slot reference-binding text can compile
+- resolver uploads the footwear refs
+- request assembly includes them
+
+When inactive:
+
+- stale `asset_id` and `asset_ids` are stripped from the compiler-side job
+- resolver uploads nothing
+- request assembly includes nothing
+- the authority report emits a warning if stale asset fields remain
+
+`source !== "reference"` is now a hard runtime gate for footwear refs.
+
+## Headwear
+
+Headwear reference authority is active only when all of these are true:
+
+- `entities.headwear.mode` is `add` or `replace`
+- `entities.headwear.source === "reference"`
+- `entities.headwear.asset_id` exists after normalization
+
+If `source` is missing, normalization now defaults headwear to `system`. `asset_id` alone does not upgrade headwear into reference authority.
+
+Inactive headwear refs are stripped and skipped exactly the same way as footwear.
+
+`source !== "reference"` is now a hard runtime gate for headwear refs.
+
+## Accessory Items
+
+Accessory item reference authority is active only when all of these are true:
+
+- `entities.accessory.mode !== "ignore"`
+- item `mode` is `add` or `replace`
+- item `source === "reference"`
+- item `asset_id` exists after normalization
+
+If item `source` is missing, normalization now defaults that item to `system`. `asset_id` alone does not upgrade the item into reference authority.
+
+Inactive item refs are stripped and skipped.
+
+This applies equally to:
+
+- eyewear
+- bag
+- neckwear
+- any future accessory item that follows the same item contract
+
+`source !== "reference"` is now a hard runtime gate for accessory refs.
+
+## Compiler and Resolver Alignment
+
+The old mismatch is gone.
+
+Compiler and resolver now agree on all reference families covered by the active authority layer:
+
+- subject
+- garment material detail refs
+- garment pattern detail refs
+- footwear
+- headwear
+- accessory items
+
+## Warning Behavior
+
+Inactive reference fields are not silently treated as active.
+
+Instead, the authority report emits warnings for cases such as:
+
+- non-reference source with stale `asset_id`
+- ignored garment detail refs under `garment.mode = "ignore"`
+- `transfer_identity` without an active subject ref
+- reference source declared without an actual `asset_id`
+
+These warnings are advisory. They do not re-activate stripped refs.

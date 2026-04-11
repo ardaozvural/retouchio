@@ -1,169 +1,154 @@
 # Asset Directory Map
 
-This document maps the runtime-facing asset and storage directories that are intentionally kept out of Git.
+## Repo-Facing Runtime Directories
 
-Goal:
+| Path | Role | Tracked in git | Current behavior |
+| --- | --- | --- | --- |
+| `refs/` | reference asset bank | ignored | source of truth for subject, garment detail, footwear, headwear, and accessory refs |
+| `inputs/` | managed input sets | ignored | contains named input-set folders under `inputs/sets/*` |
+| `staging/runs/` | per-run staged input snapshots and runtime job files | ignored | active server-backed runtime staging area |
+| `jobs/generated/` | saved generated canonical jobs | ignored | server writes canonical snapshots here |
+| `data/batches/` | batch registry and manifests | ignored | holds `registry.json` and per-batch manifests |
+| `batch_output/` | downloaded batch outputs | ignored | per-batch output directories plus legacy flat read fallback |
+| `batch_input/` | default legacy input source | ignored | direct runtime input directory |
+| `input_cmpltd/` | legacy completed-input sink | ignored | no longer used by the default staged server runtime |
+| `batch_requests.jsonl` | legacy root submission artifact | ignored | fallback when no staged runtime job provides a run-local JSONL path |
 
-- keep code, compiler logic, schemas, and docs in the repository
-- keep uploaded assets, generated jobs, local manifests, and run artifacts out of the repository
+## Asset Bank Layout
 
-## Summary
+Current standard directories:
 
-| Path | Verified purpose in repo | Keep in Git |
-| --- | --- | --- |
-| `inputs/` | Uploaded target input sets used by Input Manager and Job Builder | No |
-| `refs/` | Subject and styling reference asset bank discovered by resolver and option registry | No for image assets; directory contract only |
-| `jobs/generated/` | Saved/generated canonical job files produced by builder flows | No |
-| `data/` | Runtime data root; current code uses `data/batches/` for local registry and manifests | No for runtime contents |
+- `refs/subjects`
+- `refs/garment_details/material`
+- `refs/garment_details/pattern`
+- `refs/accessories/footwear`
+- `refs/accessories/headwear`
+- `refs/accessories/hat`
+- `refs/accessories/eyewear`
+- `refs/accessories/bag`
+- `refs/accessories/neckwear`
+- `refs/accessories/scarf`
 
-## `inputs/`
+Current populated ids in this checkout:
 
-Verified usage:
+- subjects: `subject_0002`, `subject_0003`, `subject_0004`, `subject_0005`
+- garment pattern: `pattern_detail_0001`
+- footwear: `footwear_0001`, `footwear_0002`, `footwear_0003`
+- headwear: `headwear_bandana_0001`
 
-- Input upload endpoints write input sets under `inputs/sets/<input_set_id>/`.
-- The server serves these files back through `/inputs/...`.
-- The current code writes `_meta.json` plus `target_XX` image files.
+Current empty but expected families:
 
-Rebuildable skeleton:
+- garment material
+- eyewear
+- bag
+- neckwear
+- hat compatibility path
+- scarf compatibility path
 
-```text
-inputs/
-  sets/
-    <input_set_id>/
-      _meta.json
-      target_01.jpg
-      target_02.png
-```
+## Managed Input Layout
 
-Notes:
+Managed inputs live under:
 
-- `<input_set_id>` is generated from the uploaded set name plus a timestamp.
-- `inputs/` is runtime content and should not be committed.
+- `inputs/sets/<inputSetId>/_meta.json`
+- `inputs/sets/<inputSetId>/target_01.<ext>`
+- `inputs/sets/<inputSetId>/target_02.<ext>`
 
-## `refs/`
+The server creates input-set ids from the user-supplied name plus timestamp.
 
-Verified usage:
+Managed input sets are now treated as source libraries. The default server-backed batch path copies selected files into `staging/runs/<runId>/inputs/` before execution.
 
-- Reference discovery follows `prompt_system/registry/assetBankStandard.v1.json`.
-- Subject uploads write to `refs/subjects/<subject_id>/`.
-- Asset uploads write to family-specific directories under `refs/accessories/` and `refs/garment_details/`.
-- Resolver and option registry read these directories as the active asset bank.
+## Run Staging Layout
 
-Rebuildable skeleton:
+Server-backed run staging lives under:
 
-```text
-refs/
-  subjects/
-    <subject_id>/
-      ref_01.jpg
-  garment_details/
-    material/
-      <material_detail_id>/
-        ref_01.jpg
-    pattern/
-      <pattern_detail_id>/
-        ref_01.jpg
-  accessories/
-    footwear/
-      <footwear_id>/
-        ref_01.jpg
-    headwear/
-      <headwear_id>/
-        ref_01.jpg
-    eyewear/
-      <eyewear_id>/
-        ref_01.jpg
-    bag/
-      <bag_id>/
-        ref_01.jpg
-    neckwear/
-      <neckwear_id>/
-        ref_01.jpg
-```
+- `staging/runs/<runId>/inputs/<inputFile>`
+- `staging/runs/<runId>/job.runtime.json`
+- `staging/runs/<runId>/batch_requests.jsonl`
 
-Verified canonical paths:
+## Batch Registry Layout
 
-- `refs/subjects/<subject_id>/`
-- `refs/garment_details/material/`
-- `refs/garment_details/pattern/`
-- `refs/accessories/headwear/`
-- `refs/accessories/eyewear/`
-- `refs/accessories/bag/`
-- `refs/accessories/neckwear/`
+Registry file:
 
-Additional verified path in current repo:
+- `data/batches/registry.json`
 
-- `refs/accessories/footwear/`
+Registry record shape includes:
 
-Compatibility-only paths still supported by resolver logic:
+- `id`
+- `batchName`
+- `sourceJobFile`
+- `sourceJobId`
+- `runId`
+- `inputSource`
+- `stagedInputSource`
+- `stageDir`
+- `inputFileCount`
+- `createdAt`
+- `lastKnownState`
+- `downloaded`
+- `cancelled`
+- `completedAt`
+- `lastCheckedAt`
+- `lastError`
 
-- `refs/accessories/hat/`
-- `refs/accessories/scarf/`
+Manifest file:
 
-Notes:
+- `data/batches/<safeBatchName>.manifest.json`
 
-- `refs/README.md` remains the tracked naming reference, but uploaded image assets under `refs/` should not be committed.
-- Naming patterns for ids are defined in `prompt_system/registry/assetBankStandard.v1.json`.
+Manifest payload includes:
 
-## `jobs/generated/`
+- `batchName`
+- `safeBatchName`
+- `sourceJobFile`
+- `sourceJobId`
+- `runId`
+- `inputSource`
+- `stagedInputSource`
+- `stageDir`
+- `runtimeJobFile`
+- `inputFiles`
+- `requestItems`
+- `requestKeyToInputFile`
+- `originalInputFiles`
+- `stagedInputFiles`
 
-Verified usage:
+## Output Layout
 
-- Generated canonical jobs are written to `jobs/generated/` by `prompt_system/compiler/jobPersistence.js`.
-- File names are stored as `<base_name>.canonical.json` with numeric suffixes when needed.
+Standard output path:
 
-Rebuildable skeleton:
+- `batch_output/<safeBatchName>/batch_result.jsonl`
+- `batch_output/<safeBatchName>/<requestKey>.png`
 
-```text
-jobs/
-  generated/
-    <job_name>.canonical.json
-    <job_name>-1.canonical.json
-```
+Legacy read fallback:
 
-Notes:
+- `batch_output/batch_result.jsonl`
+- `batch_output/<requestKey>.png`
 
-- `jobs/*.canonical.json` sample jobs can stay versioned.
-- `jobs/generated/` is runtime output and should not be committed.
+## Current Ignore Strategy
 
-## `data/`
+`.gitignore` excludes:
 
-Verified usage:
+- `node_modules/`
+- `.venv-validator/`
+- `.env`
+- `.DS_Store`
+- `._*`
+- `batch_output/`
+- `batch_input/`
+- `input_cmpltd/`
+- `inputs/`
+- `staging/`
+- `refs/`
+- `jobs/generated/`
+- `data/batches/`
+- `batch_requests.jsonl`
+- `*.log`
 
-- Current code uses `data/batches/registry.json` as the local batch registry.
-- Current code also writes per-batch manifest files under `data/batches/`.
+## Important Operational Detail
 
-Rebuildable skeleton:
+The directory contract is now non-destructive in the default server-backed path.
 
-```text
-data/
-  batches/
-    registry.json
-    <batch_id>.manifest.json
-```
-
-Notes:
-
-- In current repo code, `data/batches/` is the only verified runtime subdirectory under `data/`.
-- Runtime data under `data/` should not be committed.
-
-## Git Ignore Strategy
-
-Applied ignore intent:
-
-- ignore `inputs/`, `refs/`, and `jobs/generated/` because they hold uploaded or generated local artifacts
-- ignore `data/batches/` instead of all `data/` because current code only verifies runtime writes in that subtree
-- ignore `batch_requests.jsonl` and `*.log` because they are local run artifacts
-
-## `.gitkeep` Strategy
-
-No new `.gitkeep` files were added.
-
-Reason:
-
-- `jobs/generated/` is created on demand by `ensureGeneratedJobsDir()`
-- `data/batches/` is created on demand by `ensureRegistryFile()`
-- `inputs/sets/` is created by the input upload flow
-- `refs/...` directories are created by upload flows or manual asset placement
-
-The current repo already documents the asset-bank contract in tracked docs and registry files, so extra empty placeholder directories are not required for reconstruction.
+- `inputs/sets/*` remain source libraries
+- `batch_input/` is also staged per run when launched from the server
+- `staging/runs/<runId>/inputs/` is the active execution source for normal server-backed runs
+- manifests retain both original and staged input paths
+- `input_cmpltd/` remains legacy residue, not the active sink
