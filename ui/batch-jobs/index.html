@@ -23,7 +23,7 @@
       <main class="app-main">
         <header class="app-page-header">
           <h1>Batch Jobs</h1>
-          <p>Track run status, review outputs, and evaluate completed batches.</p>
+          <p>Track run status, review outputs, and make real approve / reject / retry decisions.</p>
         </header>
 
         <div class="app-content">
@@ -98,7 +98,7 @@
             <section class="card secondary-card review-workspace-card">
               <div class="card-header">
                 <h2>Output Review</h2>
-                <p class="card-description">Review outputs in output-only or compare mode, then add structured evaluation tags.</p>
+                <p class="card-description">Review outputs in output-only or compare mode, persist decisions, and create new attempts without overwriting history.</p>
               </div>
               <div class="review-workspace-grid">
                 <div class="review-workspace-panel">
@@ -108,16 +108,16 @@
                     <p class="review-session-item"><strong>Batch</strong><span id="reviewSessionBatch">-</span></p>
                     <p class="review-session-item"><strong>Mode</strong><span id="reviewSessionMode">Output Only</span></p>
                     <p class="review-session-item"><strong>Filter</strong><span id="reviewSessionFilter">All</span></p>
-                    <p class="review-session-item"><strong>Evaluation</strong><span id="reviewSessionCounts">0 reviewed / 0 total</span></p>
+                    <p class="review-session-item"><strong>Review</strong><span id="reviewSessionCounts">0 reviewed / 0 total</span></p>
                   </div>
                 </div>
                 <div class="review-workspace-panel">
                   <p class="mini-title">Review Notes</p>
-                  <p id="reviewSupportNote" class="review-support-note">Compare uses saved pairing when available. Quality tags are local review notes stored in this browser.</p>
+                  <p id="reviewSupportNote" class="review-support-note">Approve marks one final output per request key. Reject preserves history. Retry creates a new attempt.</p>
                   <div class="review-mode-legend">
                     <span class="review-mode-pill">Output Only</span>
                     <span class="review-mode-pill">Compare</span>
-                    <span class="review-mode-pill">Quality Tags</span>
+                    <span class="review-mode-pill">Attempts</span>
                   </div>
                 </div>
               </div>
@@ -146,11 +146,13 @@
               </button>
             </div>
             <label class="field output-tag-filter-field">
-              <span>Evaluation Filter</span>
+              <span>Review Filter</span>
               <select id="outputsTagFilterSelect">
                 <option value="all">All</option>
-                <option value="tagged">Reviewed</option>
-                <option value="untagged">Not Reviewed</option>
+                <option value="in_review">In Review</option>
+                <option value="approved">Approved</option>
+                <option value="rejected">Rejected</option>
+                <option value="final">Final</option>
               </select>
             </label>
           </div>

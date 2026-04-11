@@ -1,27 +1,27 @@
-const REVIEW_TAG_STORAGE_KEY = 'retouchio.batch_review_tags.v1';
-
 const state = {
   batchJobs: [],
   batchFilter: 'all',
-  reviewTags: loadReviewTags(),
   reviewSession: {
     batchName: '',
+    runId: '',
     mode: 'output',
-    tagFilter: 'all',
+    filter: 'all',
     reviewedCount: 0,
     totalCount: 0,
-    stateText: 'Open a completed run to start reviewing outputs.',
-    supportNote: 'Compare uses saved pairing when available. Quality tags are local review notes stored in this browser.',
+    stateText: 'Open a completed or failed run to review outputs and manage attempts.',
+    supportNote: 'Approve marks one final output per request key. Reject preserves history. Retry creates a new attempt.',
   },
   outputsReview: {
     open: false,
     batchName: '',
+    runId: '',
     safeBatchName: '',
     outputDir: '',
     outputSource: '',
     mode: 'output',
-    tagFilter: 'all',
+    filter: 'all',
     items: [],
+    attempts: [],
     loading: false,
     error: '',
   },
@@ -124,49 +124,44 @@ function bindEvents() {
   elements.outputsModeOutputOnlyButton.addEventListener('click', () => setOutputsReviewMode('output'));
   elements.outputsModeCompareButton.addEventListener('click', () => setOutputsReviewMode('compare'));
   elements.outputsTagFilterSelect.addEventListener('change', () => {
-    state.outputsReview.tagFilter = elements.outputsTagFilterSelect.value || 'all';
+    state.outputsReview.filter = elements.outputsTagFilterSelect.value || 'all';
     syncReviewSessionFromOutputs();
     renderOutputsModal();
   });
 
-  elements.outputsModalBody.addEventListener('click', (event) => {
+  elements.outputsModalBody.addEventListener('click', async (event) => {
     const button = event.target.closest('[data-output-action]');
     if (!button) {
       return;
     }
-    const action = button.dataset.outputAction;
-    const index = Number(button.dataset.itemIndex);
-    if (Number.isNaN(index)) {
-      return;
-    }
-    const item = state.outputsReview.items?.[index];
+
+    const action = String(button.dataset.outputAction || '').trim();
+    const attemptIndex = Number(button.dataset.attemptIndex);
+    const itemIndex = Number(button.dataset.itemIndex);
+    const item = getAttemptItem(attemptIndex, itemIndex);
     if (!item) {
       return;
     }
+
     if (action === 'preview-output') {
       openOutputImageModal(item, 'output');
       return;
     }
     if (action === 'preview-compare') {
       openOutputImageModal(item, 'compare');
-    }
-  });
-
-  elements.outputsModalBody.addEventListener('change', (event) => {
-    const select = event.target.closest('[data-output-tag-index]');
-    if (!select) {
       return;
     }
-    const index = Number(select.dataset.outputTagIndex);
-    if (Number.isNaN(index)) {
+    if (action === 'approve') {
+      await approveOutput(item);
       return;
     }
-    const item = state.outputsReview.items?.[index];
-    if (!item) {
+    if (action === 'reject') {
+      await rejectOutput(item);
       return;
     }
-    setReviewTag(state.outputsReview.batchName, item, select.value);
-    renderOutputsModal();
+    if (action === 'retry') {
+      await retryOutputItem(item);
+    }
   });
 
   document.addEventListener('keydown', (event) => {
@@ -312,57 +307,223 @@ async function downloadBatch(batchName) {
   }
 }
 
+async function retryBatchRun(runId, batchName = '') {
+  if (!runId && !batchName) {
+    showStatus('Retry target is missing.', true);
+    return;
+  }
+  const label = batchName || runId;
+  if (!window.confirm(`Create a new attempt for "${label}"?`)) {
+    return;
+  }
+
+  setBusy('batchAction', true);
+  try {
+    const response = await fetch('/api/batch/retry', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        runId: runId || null,
+        batchName: batchName || null,
+      }),
+    });
+    const payload = await response.json();
+    if (!response.ok) {
+      throw new Error(payload.error || 'Retry failed.');
+    }
+
+    state.batchJobs = Array.isArray(payload.batches) ? payload.batches : state.batchJobs;
+    state.lastRefreshAt = new Date().toISOString();
+    renderSummary();
+    renderBatchJobs();
+    renderReviewSession();
+
+    if (state.outputsReview.open && state.outputsReview.batchName) {
+      await reloadOutputsReview();
+    }
+
+    const nextBatchName = payload.retried?.batchName || payload.batchRecord?.batchName || 'new attempt';
+    showStatus(`Retry submitted: ${nextBatchName}`);
+  } catch (error) {
+    showStatus(error.message || 'Retry failed.', true);
+  } finally {
+    setBusy('batchAction', false);
+  }
+}
+
+async function approveOutput(item) {
+  if (!item?.outputId) {
+    showStatus('This output cannot be approved yet.', true);
+    return;
+  }
+  setBusy('outputs', true);
+  try {
+    const response = await fetch('/api/batch/output/approve', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ outputId: item.outputId }),
+    });
+    const payload = await response.json();
+    if (!response.ok) {
+      throw new Error(payload.error || 'Approve failed.');
+    }
+    await refreshBatchJobs();
+    await reloadOutputsReview();
+    showStatus(`Output approved: ${item.key || item.output?.file || item.outputId}`);
+  } catch (error) {
+    showStatus(error.message || 'Approve failed.', true);
+  } finally {
+    setBusy('outputs', false);
+  }
+}
+
+async function rejectOutput(item) {
+  if (!item?.outputId) {
+    showStatus('This output cannot be rejected yet.', true);
+    return;
+  }
+  setBusy('outputs', true);
+  try {
+    const response = await fetch('/api/batch/output/reject', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ outputId: item.outputId }),
+    });
+    const payload = await response.json();
+    if (!response.ok) {
+      throw new Error(payload.error || 'Reject failed.');
+    }
+    await refreshBatchJobs();
+    await reloadOutputsReview();
+    showStatus(`Output rejected: ${item.key || item.output?.file || item.outputId}`);
+  } catch (error) {
+    showStatus(error.message || 'Reject failed.', true);
+  } finally {
+    setBusy('outputs', false);
+  }
+}
+
+async function retryOutputItem(item) {
+  if (!item?.runId || !item?.key) {
+    showStatus('This output cannot be retried.', true);
+    return;
+  }
+  if (!window.confirm(`Create a new attempt for request "${item.key}"?`)) {
+    return;
+  }
+
+  setBusy('outputs', true);
+  try {
+    const response = await fetch('/api/batch/retry', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        runId: item.runId,
+        batchName: item.batchName || null,
+        requestKey: item.key,
+      }),
+    });
+    const payload = await response.json();
+    if (!response.ok) {
+      throw new Error(payload.error || 'Retry failed.');
+    }
+
+    state.batchJobs = Array.isArray(payload.batches) ? payload.batches : state.batchJobs;
+    state.lastRefreshAt = new Date().toISOString();
+    renderSummary();
+    renderBatchJobs();
+    renderReviewSession();
+    await reloadOutputsReview();
+
+    const nextBatchName = payload.retried?.batchName || payload.batchRecord?.batchName || 'new attempt';
+    showStatus(`Retry submitted for ${item.key}: ${nextBatchName}`);
+  } catch (error) {
+    showStatus(error.message || 'Retry failed.', true);
+  } finally {
+    setBusy('outputs', false);
+  }
+}
+
 async function viewBatchOutputs(batchName) {
   if (!batchName) {
     return;
   }
 
-  state.reviewSession = {
-    batchName,
-    mode: 'output',
-    tagFilter: state.outputsReview.tagFilter || 'all',
-    reviewedCount: 0,
-    totalCount: 0,
-    stateText: 'Loading output review...',
-    supportNote: 'Compare uses saved pairing when available. Quality tags are local review notes stored in this browser.',
-  };
-  state.outputsReview = {
-    open: true,
-    batchName,
-    safeBatchName: '',
-    outputDir: '',
-    outputSource: '',
-    mode: 'output',
-    tagFilter: state.outputsReview.tagFilter || 'all',
-    items: [],
-    loading: true,
-    error: '',
-  };
+  state.outputsReview.open = true;
+  state.outputsReview.batchName = batchName;
+  state.outputsReview.loading = true;
+  state.outputsReview.error = '';
   closeOutputImageModal();
-  renderReviewSession();
+  syncReviewSessionFromOutputs();
   renderOutputsModal();
 
   try {
-    const response = await fetch(`/api/batch/outputs?batchName=${encodeURIComponent(batchName)}`);
-    const payload = await response.json();
-    if (!response.ok) {
-      throw new Error(payload.error || 'Failed to load batch outputs.');
-    }
-    state.outputsReview.batchName = payload.batchName || batchName;
-    state.outputsReview.safeBatchName = payload.safeBatchName || '';
-    state.outputsReview.outputDir = payload.outputDir || '';
-    state.outputsReview.outputSource = payload.outputSource || '';
-    state.outputsReview.items = Array.isArray(payload.items) ? payload.items : [];
-    state.outputsReview.loading = false;
-    state.outputsReview.error = '';
-    syncReviewSessionFromOutputs();
-    renderOutputsModal();
+    const payload = await fetchBatchOutputsPayload(batchName);
+    applyOutputsPayload(payload, batchName);
   } catch (error) {
     state.outputsReview.loading = false;
     state.outputsReview.error = error.message || 'Failed to load batch outputs.';
     syncReviewSessionFromOutputs();
     renderOutputsModal();
   }
+}
+
+async function reloadOutputsReview() {
+  if (!state.outputsReview.open || !state.outputsReview.batchName) {
+    return;
+  }
+  try {
+    const payload = await fetchBatchOutputsPayload(state.outputsReview.batchName);
+    applyOutputsPayload(payload, state.outputsReview.batchName);
+  } catch (error) {
+    state.outputsReview.error = error.message || 'Failed to refresh output review.';
+    state.outputsReview.loading = false;
+    syncReviewSessionFromOutputs();
+    renderOutputsModal();
+  }
+}
+
+async function fetchBatchOutputsPayload(batchName) {
+  const response = await fetch(`/api/batch/outputs?batchName=${encodeURIComponent(batchName)}`);
+  const payload = await response.json();
+  if (!response.ok) {
+    throw new Error(payload.error || 'Failed to load batch outputs.');
+  }
+  return payload;
+}
+
+function applyOutputsPayload(payload, requestedBatchName) {
+  state.outputsReview.batchName = payload.batchName || requestedBatchName || '';
+  state.outputsReview.runId = payload.runId || '';
+  state.outputsReview.safeBatchName = payload.safeBatchName || '';
+  state.outputsReview.outputDir = payload.outputDir || '';
+  state.outputsReview.outputSource = payload.outputSource || '';
+  state.outputsReview.items = Array.isArray(payload.items) ? payload.items : [];
+  state.outputsReview.attempts = normalizeAttemptGroups(payload.attempts, payload.runId || '');
+  state.outputsReview.loading = false;
+  state.outputsReview.error = '';
+  syncReviewSessionFromOutputs();
+  renderOutputsModal();
+}
+
+function normalizeAttemptGroups(attempts, fallbackRunId = '') {
+  return (Array.isArray(attempts) ? attempts : []).map((attempt) => {
+    const attemptItems = Array.isArray(attempt?.items) ? attempt.items : [];
+    return {
+      ...attempt,
+      runId: attempt?.runId || fallbackRunId || '',
+      attemptId: attempt?.attemptId || '',
+      batchName: attempt?.batchName || '',
+      items: attemptItems.map((item) => ({
+        ...item,
+        batchName: attempt?.batchName || '',
+        runId: attempt?.runId || fallbackRunId || '',
+        attemptId: attempt?.attemptId || '',
+        review_state: normalizeReviewState(item?.review_state),
+        is_final: Boolean(item?.is_final),
+      })),
+    };
+  });
 }
 
 function renderSummary() {
@@ -382,19 +543,19 @@ function renderReviewSession() {
   if (!elements.reviewSessionState) {
     return;
   }
-  elements.reviewSessionState.textContent = state.reviewSession.stateText || 'Open a completed run to start reviewing outputs.';
+  elements.reviewSessionState.textContent = state.reviewSession.stateText || 'Open a completed or failed run to review outputs and manage attempts.';
   elements.reviewSessionBatch.textContent = state.reviewSession.batchName || '-';
   elements.reviewSessionMode.textContent = state.reviewSession.mode === 'compare' ? 'Compare' : 'Output Only';
-  elements.reviewSessionFilter.textContent = getTagFilterLabel(state.reviewSession.tagFilter || 'all');
+  elements.reviewSessionFilter.textContent = getReviewFilterLabel(state.reviewSession.filter || 'all');
   elements.reviewSessionCounts.textContent = `${state.reviewSession.reviewedCount || 0} reviewed / ${state.reviewSession.totalCount || 0} total`;
   if (elements.reviewSupportNote) {
-    elements.reviewSupportNote.textContent = state.reviewSession.supportNote || 'Compare uses saved pairing when available. Quality tags are local review notes stored in this browser.';
+    elements.reviewSupportNote.textContent = state.reviewSession.supportNote || 'Approve marks one final output per request key. Reject preserves history. Retry creates a new attempt.';
   }
 }
 
 function renderBatchJobs() {
   const all = Array.isArray(state.batchJobs) ? state.batchJobs.slice() : [];
-  const isBusy = state.busy.batchAction || state.busy.refreshBatches;
+  const busy = state.busy.batchAction || state.busy.refreshBatches || state.busy.outputs;
   const active = all.filter((item) => isActiveBatch(item) && batchMatchesFilter(item, state.batchFilter));
   const completed = all.filter((item) => isCompletedBatch(item) && batchMatchesFilter(item, state.batchFilter));
   const failed = all.filter((item) => isFailedOrCancelledBatch(item) && batchMatchesFilter(item, state.batchFilter));
@@ -407,9 +568,9 @@ function renderBatchJobs() {
   elements.completedRunsSection.hidden = !showCompleted;
   elements.failedRunsSection.hidden = !showFailed;
 
-  renderBatchSection(elements.activeRunsList, elements.activeRunsEmpty, active, isBusy, 'active');
-  renderBatchSection(elements.completedRunsList, elements.completedRunsEmpty, completed, isBusy, 'completed');
-  renderBatchSection(elements.failedRunsList, elements.failedRunsEmpty, failed, isBusy, 'failed');
+  renderBatchSection(elements.activeRunsList, elements.activeRunsEmpty, active, busy, 'active');
+  renderBatchSection(elements.completedRunsList, elements.completedRunsEmpty, completed, busy, 'completed');
+  renderBatchSection(elements.failedRunsList, elements.failedRunsEmpty, failed, busy, 'failed');
 }
 
 function renderBatchSection(listElement, emptyElement, items, isBusy, sectionType) {
@@ -428,25 +589,6 @@ function renderBatchSection(listElement, emptyElement, items, isBusy, sectionTyp
   listElement.innerHTML = items.map((batch) => renderBatchCard(batch, isBusy, sectionType)).join('');
 }
 
-function getSectionEmptyMessage(sectionType, filterValue) {
-  if (filterValue === 'active') {
-    return 'No active runs match the current view.';
-  }
-  if (filterValue === 'completed') {
-    return 'No completed runs match the current view.';
-  }
-  if (filterValue === 'failed' || filterValue === 'cancelled') {
-    return 'No failed or cancelled runs match the current view.';
-  }
-  if (sectionType === 'active') {
-    return 'No active runs right now.';
-  }
-  if (sectionType === 'completed') {
-    return 'No completed runs yet.';
-  }
-  return 'No failed or cancelled runs.';
-}
-
 function renderBatchCard(batch, isBusy, sectionType) {
   const status = normalizeUiBatchState(batch.status || batch.lastKnownState);
   const statusClass = status.toLowerCase();
@@ -457,17 +599,18 @@ function renderBatchCard(batch, isBusy, sectionType) {
   const downloadNeeded = Boolean(batch.downloadNeeded || (status === 'SUCCEEDED' && !batch.downloaded));
   const cancelled = Boolean(batch.cancelled);
   const canDownload = !isBusy && status === 'SUCCEEDED';
-  const canViewOutputs = !isBusy && status === 'SUCCEEDED';
+  const canViewOutputs = !isBusy && (status === 'SUCCEEDED' || status === 'FAILED' || status === 'CANCELLED');
   const canCancel = !isBusy && !cancelled && (status === 'PENDING' || status === 'RUNNING');
-  const reviewedCount = getReviewedCountForBatch(batchName);
-  const reviewState = reviewedCount > 0 ? `${reviewedCount} reviewed` : 'Not reviewed yet';
-  const indicatorText = downloadNeeded ? 'Download needed' : (batch.downloaded ? 'Downloaded' : 'Not downloaded');
+  const canRetry = !isBusy && Boolean(batch.runId);
   const sectionClass = sectionType === 'active'
     ? 'batch-job-card-active'
     : (sectionType === 'completed' ? 'batch-job-card-completed' : 'batch-job-card-secondary');
   const errorText = batch.lastError ? `<p class="batch-job-note batch-job-note-error">${escapeHtml(batch.lastError)}</p>` : '';
+  const runReviewText = getRunReviewSummaryText(batch.runSummary || batch.outputSummary);
   const metaRows = [
     renderMetaRow('Batch name', batchName),
+    renderMetaRow('Run', batch.runId || '-'),
+    renderMetaRow('Attempt', batch.attemptId || '-'),
     renderMetaRow('Created', formatDateTime(createdAt)),
     renderMetaRow('Last checked', formatDateTime(lastChecked)),
     renderMetaRow('Source job', getBatchSourceLabel(batch)),
@@ -489,9 +632,18 @@ function renderBatchCard(batch, isBusy, sectionType) {
       <button class="button button-small button-secondary" data-batch-action="download" data-batch-name="${escapeAttribute(batchName)}"${canDownload ? '' : ' disabled'}>Download</button>
     `);
     actionButtons.push(`
+      <button class="button button-small button-secondary" data-batch-action="retry-run" data-batch-name="${escapeAttribute(batchName)}" data-run-id="${escapeAttribute(batch.runId || '')}"${canRetry ? '' : ' disabled'}>Retry</button>
+    `);
+    actionButtons.push(`
       <button class="button button-small button-secondary" data-batch-action="refresh" data-batch-name="${escapeAttribute(batchName)}"${isBusy ? ' disabled' : ''}>Refresh Status</button>
     `);
   } else {
+    actionButtons.push(`
+      <button class="button button-small button-secondary" data-batch-action="view-outputs" data-batch-name="${escapeAttribute(batchName)}"${canViewOutputs ? '' : ' disabled'}>View Outputs</button>
+    `);
+    actionButtons.push(`
+      <button class="button button-small button-secondary" data-batch-action="retry-run" data-batch-name="${escapeAttribute(batchName)}" data-run-id="${escapeAttribute(batch.runId || '')}"${canRetry ? '' : ' disabled'}>Retry</button>
+    `);
     actionButtons.push(`
       <button class="button button-small button-secondary" data-batch-action="refresh" data-batch-name="${escapeAttribute(batchName)}"${isBusy ? ' disabled' : ''}>Refresh Status</button>
     `);
@@ -501,12 +653,12 @@ function renderBatchCard(batch, isBusy, sectionType) {
     <article class="batch-job-card ${sectionClass}">
       <div class="batch-job-topline">
         <span class="status-badge ${statusClass}">${escapeHtml(getStatusLabel(status))}</span>
-        <span class="indicator-pill ${downloadNeeded ? 'warn' : 'ok'}">${escapeHtml(indicatorText)}</span>
+        <span class="indicator-pill ${downloadNeeded ? 'warn' : 'ok'}">${escapeHtml(downloadNeeded ? 'Download needed' : (batch.downloaded ? 'Downloaded' : 'Not downloaded'))}</span>
       </div>
       <div class="batch-job-header">
         <div class="batch-job-identity">
           <h3 class="batch-job-title" title="${escapeAttribute(displayName)}">${escapeHtml(displayName)}</h3>
-          <p class="batch-job-subtitle">${escapeHtml(getBatchSubtitle(sectionType, batch, reviewState))}</p>
+          <p class="batch-job-subtitle">${escapeHtml(getBatchSubtitle(sectionType, batch, runReviewText))}</p>
         </div>
       </div>
       <div class="batch-job-meta-grid">
@@ -524,46 +676,6 @@ function renderMetaRow(label, value) {
   return `<p class="batch-job-meta"><strong>${escapeHtml(label)}</strong><span>${escapeHtml(value || '-')}</span></p>`;
 }
 
-function getBatchDisplayName(batch) {
-  const sourceJobId = String(batch?.sourceJobId || '').trim();
-  if (sourceJobId) {
-    return sourceJobId;
-  }
-  const sourceJobFile = String(batch?.sourceJobFile || '').trim();
-  if (sourceJobFile) {
-    const fileName = sourceJobFile.split('/').pop() || sourceJobFile;
-    return fileName.replace(/\.canonical\.json$/i, '').replace(/\.json$/i, '');
-  }
-  return String(batch?.batchName || 'Batch run');
-}
-
-function getBatchSourceLabel(batch) {
-  const sourceJobFile = String(batch?.sourceJobFile || '').trim();
-  if (sourceJobFile) {
-    return sourceJobFile;
-  }
-  return String(batch?.sourceJobId || '-');
-}
-
-function getBatchSubtitle(sectionType, batch, reviewState) {
-  const status = normalizeUiBatchState(batch.status || batch.lastKnownState);
-  if (sectionType === 'active') {
-    return status === 'PENDING'
-      ? 'Queued and waiting to start.'
-      : 'Currently running. Cancel is available while active.';
-  }
-  if (sectionType === 'completed') {
-    if (batch.downloadNeeded || !batch.downloaded) {
-      return 'Finished and ready for download before review.';
-    }
-    return `Finished and ready for evaluation. ${reviewState}.`;
-  }
-  if (status === 'FAILED') {
-    return 'Finished with an error. Refresh status or inspect the batch metadata.';
-  }
-  return 'Run was cancelled before completion.';
-}
-
 function handleBatchListClick(event) {
   const button = event.target.closest('[data-batch-action]');
   if (!button) {
@@ -571,9 +683,8 @@ function handleBatchListClick(event) {
   }
   const action = button.dataset.batchAction;
   const batchName = button.dataset.batchName;
-  if (!action || !batchName) {
-    return;
-  }
+  const runId = button.dataset.runId || '';
+
   if (action === 'refresh') {
     refreshSingleBatchStatus(batchName);
     return;
@@ -588,6 +699,10 @@ function handleBatchListClick(event) {
   }
   if (action === 'view-outputs') {
     viewBatchOutputs(batchName);
+    return;
+  }
+  if (action === 'retry-run') {
+    retryBatchRun(runId, batchName);
   }
 }
 
@@ -598,7 +713,7 @@ function renderOutputsModal() {
     elements.outputsModalBody.innerHTML = '';
     elements.outputsModalMeta.textContent = '-';
     if (elements.outputsModalSupportNote) {
-      elements.outputsModalSupportNote.textContent = 'Compare uses saved pairing when available. Missing pairs are shown honestly.';
+      elements.outputsModalSupportNote.textContent = 'Approve marks one final output per request key. Reject preserves history. Retry creates a new attempt.';
     }
     elements.outputsTagFilterSelect.value = 'all';
     renderOutputsModeToggle();
@@ -609,6 +724,9 @@ function renderOutputsModal() {
   elements.outputsModal.setAttribute('aria-hidden', 'false');
   elements.outputsModalTitle.textContent = 'Output Review';
   const metaParts = [state.outputsReview.batchName || '-'];
+  if (state.outputsReview.runId) {
+    metaParts.push(state.outputsReview.runId);
+  }
   if (state.outputsReview.outputDir) {
     metaParts.push(state.outputsReview.outputDir);
   }
@@ -616,7 +734,7 @@ function renderOutputsModal() {
   if (elements.outputsModalSupportNote) {
     elements.outputsModalSupportNote.textContent = getOutputReviewSupportNote();
   }
-  elements.outputsTagFilterSelect.value = state.outputsReview.tagFilter || 'all';
+  elements.outputsTagFilterSelect.value = state.outputsReview.filter || 'all';
   renderOutputsModeToggle();
 
   if (state.outputsReview.loading) {
@@ -628,46 +746,66 @@ function renderOutputsModal() {
     return;
   }
 
-  const visibleItems = getFilteredOutputItems();
-  if (visibleItems.length === 0) {
+  const groups = getRenderableAttemptGroups();
+  if (groups.length === 0) {
     elements.outputsModalBody.innerHTML = `<div class="output-empty">${escapeHtml(getOutputReviewEmptyState())}</div>`;
     return;
   }
 
-  const mode = state.outputsReview.mode === 'compare' ? 'compare' : 'output';
-  if (mode === 'output') {
-    const outputItems = visibleItems
-      .map((item) => ({ item, originalIndex: state.outputsReview.items.indexOf(item) }))
-      .filter(({ item }) => Boolean(item?.output?.url));
+  elements.outputsModalBody.innerHTML = groups.map((group, attemptIndex) => renderAttemptGroup(group, attemptIndex)).join('');
+}
 
-    if (outputItems.length === 0) {
-      elements.outputsModalBody.innerHTML = '<div class="output-empty">No outputs downloaded yet for this batch.</div>';
-      return;
-    }
-
-    elements.outputsModalBody.innerHTML = `
-      <div class="output-grid">
-        ${outputItems.map(({ item, originalIndex }) => renderOutputOnlyCard(item, originalIndex)).join('')}
-      </div>
-    `;
-    return;
+function renderAttemptGroup(group, attemptIndex) {
+  const status = normalizeUiBatchState(group.status);
+  const statusClass = status.toLowerCase();
+  const summary = summarizeOutputItems(group.items);
+  const metaParts = [
+    group.batchName || '-',
+    group.runId || '-',
+    group.attemptId || '-',
+  ];
+  if (group.createdAt) {
+    metaParts.push(formatDateTime(group.createdAt));
   }
 
-  elements.outputsModalBody.innerHTML = `
-    <div class="output-grid">
-      ${visibleItems.map((item) => renderCompareCard(item, state.outputsReview.items.indexOf(item))).join('')}
-    </div>
+  const content = group.visibleItems.length > 0
+    ? `
+      <div class="output-grid">
+        ${group.visibleItems.map(({ item, originalIndex }) => (
+          state.outputsReview.mode === 'compare'
+            ? renderCompareCard(item, attemptIndex, originalIndex)
+            : renderOutputOnlyCard(item, attemptIndex, originalIndex)
+        )).join('')}
+      </div>
+    `
+    : `<div class="output-empty">${escapeHtml(getAttemptEmptyState(group))}</div>`;
+
+  return `
+    <section class="attempt-group">
+      <div class="attempt-group-header">
+        <div class="attempt-group-copy">
+          <p class="attempt-group-title">Attempt ${escapeHtml(group.attemptId || '-')}</p>
+          <p class="attempt-group-meta">${escapeHtml(metaParts.join(' | '))}</p>
+        </div>
+        <div class="attempt-group-pills">
+          <span class="status-badge ${statusClass}">${escapeHtml(getStatusLabel(status))}</span>
+          <span class="indicator-pill">${escapeHtml(`${summary.total} output${summary.total === 1 ? '' : 's'}`)}</span>
+          ${summary.final > 0 ? `<span class="tag-pill approved">${escapeHtml(`${summary.final} final`)}</span>` : ''}
+        </div>
+      </div>
+      ${content}
+    </section>
   `;
 }
 
-function renderOutputOnlyCard(item, itemIndex) {
-  const tag = getReviewTag(state.outputsReview.batchName, item);
+function renderOutputOnlyCard(item, attemptIndex, itemIndex) {
   return `
     <article class="output-thumb-card">
       <button
         class="output-thumb-wrap output-thumb-single"
         type="button"
         data-output-action="preview-output"
+        data-attempt-index="${attemptIndex}"
         data-item-index="${itemIndex}"
       >
         <img
@@ -680,20 +818,21 @@ function renderOutputOnlyCard(item, itemIndex) {
         <p class="output-thumb-name" title="${escapeAttribute(item.output.file || item.key || '')}">
           ${escapeHtml(item.output.file || item.key || 'Unnamed output')}
         </p>
-        ${renderTagControls(tag, itemIndex)}
+        ${renderOutputStatusRow(item)}
+        ${renderOutputActions(item, attemptIndex, itemIndex)}
       </div>
     </article>
   `;
 }
 
-function renderCompareCard(item, itemIndex) {
-  const tag = getReviewTag(state.outputsReview.batchName, item);
+function renderCompareCard(item, attemptIndex, itemIndex) {
   return `
     <article class="output-thumb-card">
       <button
         class="output-thumb-wrap output-thumb-pair"
         type="button"
         data-output-action="preview-compare"
+        data-attempt-index="${attemptIndex}"
         data-item-index="${itemIndex}"
       >
         <div class="output-thumb-pair-grid">
@@ -711,39 +850,60 @@ function renderCompareCard(item, itemIndex) {
         <p class="output-thumb-name" title="${escapeAttribute(item.key || item.output?.file || '')}">
           ${escapeHtml(item.key || item.output?.file || 'No key')}
         </p>
-        ${renderTagControls(tag, itemIndex)}
+        ${renderOutputStatusRow(item)}
+        ${renderOutputActions(item, attemptIndex, itemIndex)}
       </div>
     </article>
   `;
 }
 
-function renderTagControls(tag, itemIndex) {
-  const safeTag = tag || '';
-  const pill = safeTag
-    ? `<span class="tag-pill ${escapeAttribute(safeTag)}">${escapeHtml(getTagLabel(safeTag))}</span>`
-    : '<span class="tag-pill">Not Reviewed</span>';
+function renderOutputStatusRow(item) {
+  const chips = [
+    `<span class="tag-pill ${escapeAttribute(getReviewTone(item.review_state))}">${escapeHtml(getReviewStateLabel(item.review_state))}</span>`,
+  ];
+  if (item.is_final) {
+    chips.push('<span class="tag-pill approved">Final</span>');
+  }
+  if (item.key) {
+    chips.push(`<span class="indicator-pill">${escapeHtml(item.key)}</span>`);
+  }
   return `
-    <div class="output-tag-row">
-      <span class="output-tag-label">Quality Tag</span>
-      <select class="output-tag-select" data-output-tag-index="${itemIndex}">
-        ${renderTagOptions(safeTag)}
-      </select>
-      ${pill}
+    <div class="output-status-row">
+      ${chips.join('')}
     </div>
   `;
 }
 
-function renderTagOptions(selectedValue) {
-  const options = [
-    { value: '', label: 'Not reviewed' },
-    { value: 'approved', label: 'Looks good' },
-    { value: 'review', label: 'Needs Review' },
-    { value: 'rejected', label: 'Reject' },
-  ];
-  return options.map((option) => {
-    const selected = option.value === selectedValue ? ' selected' : '';
-    return `<option value="${escapeAttribute(option.value)}"${selected}>${escapeHtml(option.label)}</option>`;
-  }).join('');
+function renderOutputActions(item, attemptIndex, itemIndex) {
+  const busy = state.busy.outputs || state.busy.batchAction || state.busy.refreshBatches;
+  return `
+    <div class="output-action-row">
+      <button
+        class="button button-small button-primary"
+        type="button"
+        data-output-action="approve"
+        data-attempt-index="${attemptIndex}"
+        data-item-index="${itemIndex}"
+        ${busy || !item.outputId ? 'disabled' : ''}
+      >Approve</button>
+      <button
+        class="button button-small button-secondary"
+        type="button"
+        data-output-action="reject"
+        data-attempt-index="${attemptIndex}"
+        data-item-index="${itemIndex}"
+        ${busy || !item.outputId ? 'disabled' : ''}
+      >Reject</button>
+      <button
+        class="button button-small button-secondary"
+        type="button"
+        data-output-action="retry"
+        data-attempt-index="${attemptIndex}"
+        data-item-index="${itemIndex}"
+        ${busy || !item.runId || !item.key ? 'disabled' : ''}
+      >Retry</button>
+    </div>
+  `;
 }
 
 function renderThumb(node, emptyText) {
@@ -754,20 +914,42 @@ function renderThumb(node, emptyText) {
   return `<img src="${escapeAttribute(node.url)}" alt="${escapeAttribute(alt)}" loading="lazy" />`;
 }
 
-function getFilteredOutputItems() {
-  const baseItems = Array.isArray(state.outputsReview.items) ? state.outputsReview.items : [];
+function getRenderableAttemptGroups() {
+  const attempts = Array.isArray(state.outputsReview.attempts) ? state.outputsReview.attempts : [];
+  return attempts
+    .map((attempt) => ({
+      ...attempt,
+      visibleItems: getVisibleItemsForAttempt(attempt).map((item) => ({
+        item,
+        originalIndex: attempt.items.indexOf(item),
+      })),
+    }))
+    .filter((attempt) => attempt.visibleItems.length > 0 || shouldShowAttemptWithoutItems(attempt));
+}
+
+function getVisibleItemsForAttempt(attempt) {
+  const baseItems = Array.isArray(attempt?.items) ? attempt.items.slice() : [];
   const mode = state.outputsReview.mode === 'compare' ? 'compare' : 'output';
   let items = mode === 'output'
     ? baseItems.filter((item) => Boolean(item?.output?.url))
     : baseItems.slice();
 
-  const tagFilter = state.outputsReview.tagFilter || 'all';
-  if (tagFilter === 'tagged') {
-    items = items.filter((item) => Boolean(getReviewTag(state.outputsReview.batchName, item)));
-  } else if (tagFilter === 'untagged') {
-    items = items.filter((item) => !getReviewTag(state.outputsReview.batchName, item));
+  const filter = state.outputsReview.filter || 'all';
+  if (filter === 'in_review') {
+    items = items.filter((item) => normalizeReviewState(item?.review_state) === 'in_review');
+  } else if (filter === 'approved') {
+    items = items.filter((item) => normalizeReviewState(item?.review_state) === 'approved');
+  } else if (filter === 'rejected') {
+    items = items.filter((item) => normalizeReviewState(item?.review_state) === 'rejected');
+  } else if (filter === 'final') {
+    items = items.filter((item) => Boolean(item?.is_final));
   }
   return items;
+}
+
+function shouldShowAttemptWithoutItems(attempt) {
+  const status = normalizeUiBatchState(attempt?.status);
+  return status === 'PENDING' || status === 'RUNNING' || status === 'FAILED' || status === 'CANCELLED';
 }
 
 function setOutputsReviewMode(mode) {
@@ -785,7 +967,7 @@ function setOutputsReviewMode(mode) {
 
 function renderOutputsModeToggle() {
   const activeMode = state.outputsReview.mode === 'compare' ? 'compare' : 'output';
-  const loading = Boolean(state.outputsReview.loading);
+  const loading = Boolean(state.outputsReview.loading || state.busy.outputs);
   const outputActive = activeMode === 'output';
   const compareActive = activeMode === 'compare';
 
@@ -802,12 +984,14 @@ function closeOutputsModal() {
   state.outputsReview = {
     open: false,
     batchName: '',
+    runId: '',
     safeBatchName: '',
     outputDir: '',
     outputSource: '',
     mode: 'output',
-    tagFilter: 'all',
+    filter: 'all',
     items: [],
+    attempts: [],
     loading: false,
     error: '',
   };
@@ -885,84 +1069,39 @@ function closeOutputImageModal() {
   elements.outputsLargeOutputEmpty.hidden = true;
 }
 
-function loadReviewTags() {
-  try {
-    const raw = localStorage.getItem(REVIEW_TAG_STORAGE_KEY);
-    const parsed = raw ? JSON.parse(raw) : {};
-    return parsed && typeof parsed === 'object' ? parsed : {};
-  } catch (_error) {
-    return {};
-  }
+function getAttemptItem(attemptIndex, itemIndex) {
+  const attempt = Array.isArray(state.outputsReview.attempts) ? state.outputsReview.attempts[attemptIndex] : null;
+  return Array.isArray(attempt?.items) ? attempt.items[itemIndex] || null : null;
 }
 
-function persistReviewTags() {
-  try {
-    localStorage.setItem(REVIEW_TAG_STORAGE_KEY, JSON.stringify(state.reviewTags));
-  } catch (_error) {
-    // ignore storage failures
-  }
-}
-
-function getReviewTagKey(batchName, item) {
-  return `${batchName}::${item?.key || item?.output?.file || item?.input?.file || 'unknown'}`;
-}
-
-function getReviewTag(batchName, item) {
-  const key = getReviewTagKey(batchName, item);
-  return state.reviewTags[key] || '';
-}
-
-function setReviewTag(batchName, item, tag) {
-  const key = getReviewTagKey(batchName, item);
-  const value = String(tag || '').trim();
-  if (!value) {
-    delete state.reviewTags[key];
-  } else {
-    state.reviewTags[key] = value;
-  }
-  persistReviewTags();
-  syncReviewSessionFromOutputs();
-}
-
-function getTagLabel(tag) {
-  if (tag === 'approved') return 'Looks Good';
-  if (tag === 'review') return 'Needs Review';
-  if (tag === 'rejected') return 'Reject';
-  return 'Not Reviewed';
-}
-
-function getTagFilterLabel(filterValue) {
-  if (filterValue === 'tagged') return 'Reviewed';
-  if (filterValue === 'untagged') return 'Not Reviewed';
-  return 'All';
-}
-
-function getReviewedCountForBatch(batchName) {
-  if (!batchName) {
-    return 0;
-  }
-  const prefix = `${batchName}::`;
-  return Object.keys(state.reviewTags).filter((key) => key.startsWith(prefix) && state.reviewTags[key]).length;
+function getFlattenedOutputItems() {
+  const attempts = Array.isArray(state.outputsReview.attempts) ? state.outputsReview.attempts : [];
+  return attempts.flatMap((attempt) => Array.isArray(attempt?.items) ? attempt.items : []);
 }
 
 function syncReviewSessionFromOutputs() {
-  const items = Array.isArray(state.outputsReview.items) ? state.outputsReview.items : [];
-  const reviewedCount = items.filter((item) => Boolean(getReviewTag(state.outputsReview.batchName, item))).length;
-  let stateText = 'Open a completed run to start reviewing outputs.';
+  const items = getFlattenedOutputItems().filter((item) => Boolean(item?.output?.url));
+  const reviewedCount = items.filter((item) => {
+    const reviewState = normalizeReviewState(item?.review_state);
+    return reviewState === 'approved' || reviewState === 'rejected';
+  }).length;
+
+  let stateText = 'Open a completed or failed run to review outputs and manage attempts.';
   if (state.outputsReview.loading) {
     stateText = 'Loading output review...';
   } else if (state.outputsReview.error) {
     stateText = state.outputsReview.error;
   } else if (state.outputsReview.batchName) {
     stateText = items.length > 0
-      ? `Reviewing ${items.length} item${items.length === 1 ? '' : 's'} from the selected batch.`
-      : 'No outputs downloaded yet for this batch.';
+      ? `Reviewing ${items.length} output${items.length === 1 ? '' : 's'} across ${Math.max(1, state.outputsReview.attempts.length)} attempt${state.outputsReview.attempts.length === 1 ? '' : 's'}.`
+      : 'No downloaded outputs yet for this run. Pending attempts stay visible here.';
   }
 
   state.reviewSession = {
-    batchName: state.outputsReview.batchName || state.reviewSession.batchName || '',
+    batchName: state.outputsReview.batchName || '',
+    runId: state.outputsReview.runId || '',
     mode: state.outputsReview.mode === 'compare' ? 'compare' : 'output',
-    tagFilter: state.outputsReview.tagFilter || 'all',
+    filter: state.outputsReview.filter || 'all',
     reviewedCount,
     totalCount: items.length,
     stateText,
@@ -973,31 +1112,141 @@ function syncReviewSessionFromOutputs() {
 
 function getOutputReviewSupportNote() {
   if (state.outputsReview.outputSource === 'legacyFlat') {
-    return 'Review is reading from a legacy flat output folder for this batch. Compare still uses saved pairing when available.';
+    return 'Review is reading from a legacy flat output folder. Decisions still persist in the file registry, and retry still creates a new attempt.';
   }
   if (state.outputsReview.mode === 'compare') {
-    return 'Compare uses saved pairing when available. Missing pairs are shown honestly, not guessed.';
+    return 'Compare uses saved pairing when available. Approve marks one final output per request key across attempts.';
   }
-  return 'Quality tags are local review notes stored in this browser. Compare uses saved pairing when available.';
+  return 'Approve marks one final output per request key. Reject preserves history. Retry creates a new attempt.';
 }
 
 function getOutputReviewEmptyState() {
   if (state.outputsReview.mode === 'compare') {
-    if (state.outputsReview.tagFilter === 'tagged') {
-      return 'No reviewed compare items yet.';
-    }
-    if (state.outputsReview.tagFilter === 'untagged') {
-      return 'No unreviewed compare items remain.';
-    }
-    return 'No paired inputs found for compare review yet.';
+    if (state.outputsReview.filter === 'approved') return 'No approved compare items yet.';
+    if (state.outputsReview.filter === 'rejected') return 'No rejected compare items yet.';
+    if (state.outputsReview.filter === 'in_review') return 'No in-review compare items remain.';
+    if (state.outputsReview.filter === 'final') return 'No final compare items yet.';
+    return 'No paired items are available for compare review yet.';
   }
-  if (state.outputsReview.tagFilter === 'tagged') {
-    return 'No reviewed outputs yet.';
-  }
-  if (state.outputsReview.tagFilter === 'untagged') {
-    return 'No unreviewed outputs remain.';
-  }
+  if (state.outputsReview.filter === 'approved') return 'No approved outputs yet.';
+  if (state.outputsReview.filter === 'rejected') return 'No rejected outputs yet.';
+  if (state.outputsReview.filter === 'in_review') return 'No in-review outputs remain.';
+  if (state.outputsReview.filter === 'final') return 'No final outputs yet.';
   return 'No outputs downloaded yet.';
+}
+
+function getAttemptEmptyState(attempt) {
+  const status = normalizeUiBatchState(attempt?.status);
+  if (status === 'PENDING') {
+    return 'This attempt is queued. Outputs will appear here after download.';
+  }
+  if (status === 'RUNNING') {
+    return 'This attempt is still running. Outputs will appear here after download.';
+  }
+  if (status === 'FAILED') {
+    return 'This attempt failed before reviewable outputs were available.';
+  }
+  if (status === 'CANCELLED') {
+    return 'This attempt was cancelled before reviewable outputs were available.';
+  }
+  return getOutputReviewEmptyState();
+}
+
+function getSectionEmptyMessage(sectionType, filterValue) {
+  if (filterValue === 'active') {
+    return 'No active runs match the current view.';
+  }
+  if (filterValue === 'completed') {
+    return 'No completed runs match the current view.';
+  }
+  if (filterValue === 'failed' || filterValue === 'cancelled') {
+    return 'No failed or cancelled runs match the current view.';
+  }
+  if (sectionType === 'active') {
+    return 'No active runs right now.';
+  }
+  if (sectionType === 'completed') {
+    return 'No completed runs yet.';
+  }
+  return 'No failed or cancelled runs.';
+}
+
+function summarizeOutputItems(items) {
+  const summary = {
+    total: 0,
+    in_review: 0,
+    approved: 0,
+    rejected: 0,
+    final: 0,
+  };
+
+  for (const item of Array.isArray(items) ? items : []) {
+    if (!item?.output?.url) {
+      continue;
+    }
+    const reviewState = normalizeReviewState(item.review_state);
+    summary.total += 1;
+    summary[reviewState] += 1;
+    if (item.is_final) {
+      summary.final += 1;
+    }
+  }
+
+  return summary;
+}
+
+function getRunReviewSummaryText(summary) {
+  const normalized = {
+    total: Number(summary?.total || 0),
+    approved: Number(summary?.approved || 0),
+    rejected: Number(summary?.rejected || 0),
+    final: Number(summary?.final || 0),
+  };
+
+  if (normalized.total === 0) {
+    return 'No downloaded outputs yet.';
+  }
+  return `${normalized.approved} approved, ${normalized.rejected} rejected, ${normalized.final} final.`;
+}
+
+function getBatchDisplayName(batch) {
+  const sourceJobId = String(batch?.sourceJobId || batch?.jobId || '').trim();
+  if (sourceJobId) {
+    return sourceJobId;
+  }
+  const sourceJobFile = String(batch?.sourceJobFile || '').trim();
+  if (sourceJobFile) {
+    const fileName = sourceJobFile.split('/').pop() || sourceJobFile;
+    return fileName.replace(/\.canonical\.json$/i, '').replace(/\.json$/i, '');
+  }
+  return String(batch?.batchName || 'Batch run');
+}
+
+function getBatchSourceLabel(batch) {
+  const sourceJobFile = String(batch?.sourceJobFile || '').trim();
+  if (sourceJobFile) {
+    return sourceJobFile;
+  }
+  return String(batch?.sourceJobId || batch?.jobId || '-');
+}
+
+function getBatchSubtitle(sectionType, batch, reviewState) {
+  const status = normalizeUiBatchState(batch.status || batch.lastKnownState);
+  if (sectionType === 'active') {
+    return status === 'PENDING'
+      ? 'Queued and waiting to start.'
+      : 'Currently running. Cancel is available while active.';
+  }
+  if (sectionType === 'completed') {
+    if (batch.downloadNeeded || !batch.downloaded) {
+      return 'Finished and ready for download before review.';
+    }
+    return `Finished. ${reviewState}`;
+  }
+  if (status === 'FAILED') {
+    return 'Finished with an error. Retry creates a new attempt without overwriting history.';
+  }
+  return 'Run was cancelled before completion. Retry creates a new attempt without overwriting history.';
 }
 
 function getStatusLabel(status) {
@@ -1007,6 +1256,30 @@ function getStatusLabel(status) {
   if (status === 'FAILED') return 'Failed';
   if (status === 'CANCELLED') return 'Cancelled';
   return 'Unknown';
+}
+
+function getReviewStateLabel(reviewState) {
+  if (reviewState === 'approved') return 'Approved';
+  if (reviewState === 'rejected') return 'Rejected';
+  return 'In Review';
+}
+
+function getReviewTone(reviewState) {
+  if (reviewState === 'approved') return 'approved';
+  if (reviewState === 'rejected') return 'rejected';
+  return 'review';
+}
+
+function normalizeReviewState(value) {
+  return value === 'approved' || value === 'rejected' ? value : 'in_review';
+}
+
+function getReviewFilterLabel(filterValue) {
+  if (filterValue === 'in_review') return 'In Review';
+  if (filterValue === 'approved') return 'Approved';
+  if (filterValue === 'rejected') return 'Rejected';
+  if (filterValue === 'final') return 'Final';
+  return 'All';
 }
 
 function normalizeUiBatchState(value) {
@@ -1071,11 +1344,12 @@ function upsertBatchState(batch) {
 
 function setBusy(action, isBusy) {
   state.busy[action] = isBusy;
-  const busy = state.busy.batchAction || state.busy.refreshBatches;
+  const busy = state.busy.batchAction || state.busy.refreshBatches || state.busy.outputs;
   elements.refreshAllBatchesButton.disabled = busy;
-  elements.refreshAllBatchesButton.textContent = busy ? 'Refreshing...' : 'Refresh All';
+  elements.refreshAllBatchesButton.textContent = busy ? 'Working...' : 'Refresh All';
   elements.batchFilterSelect.disabled = busy;
   renderBatchJobs();
+  renderOutputsModal();
 }
 
 function showStatus(message, isError = false) {

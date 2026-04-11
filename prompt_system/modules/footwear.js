@@ -17,6 +17,7 @@ module.exports = {
 
     const slotKey = entity.slot_key || VARIANT_TO_SLOT[entity.variant] || 'footwear';
     const slotConfig = context.slotRules?.slots?.[slotKey];
+    const referenceAuthorityActive = Boolean(entity.reference_authority_active);
     const lines = [];
 
     if (entity.mode === 'preserve') {
@@ -25,10 +26,10 @@ module.exports = {
       lines.push('Preserve original footwear silhouette, finish, color family, wear condition, and clean integration to the existing feet and lower-body pose.');
     } else if (entity.mode === 'replace') {
       lines.push('You must remove the original footwear and replace it with the requested footwear result; do not preserve any original footwear details once replacement is active.');
-      if (slotConfig?.referenceBindingText && entity.asset_id) {
+      if (referenceAuthorityActive && slotConfig?.referenceBindingText) {
         lines.push(slotConfig.referenceBindingText);
       }
-      if (Array.isArray(slotConfig?.rules) && slotConfig.rules.length > 0) {
+      if (referenceAuthorityActive && Array.isArray(slotConfig?.rules) && slotConfig.rules.length > 0) {
         lines.push(...slotConfig.rules);
       } else if (entity.variant) {
         lines.push(`You must replace the original footwear with a ${entity.variant} result only.`);

@@ -6,6 +6,7 @@ const {
   loadAssetBankStandard,
   validateAssetIdWithStandard,
 } = require('./assetBank');
+const { createReferenceAuthorityState } = require('./referenceAuthority');
 
 function listImageFiles(dirPath) {
   return fs
@@ -63,14 +64,11 @@ function assertStandardId(standard, entityKey, value, accessoryFamily = null) {
   }
 }
 
-function subjectUsesReference(entity) {
-  return Boolean(entity && entity.source === 'reference' && entity.reference_id);
-}
-
 function resolveReferences(canonicalJob, options = {}) {
   const rootDir = options.rootDir || path.resolve(__dirname, '..', '..');
   const standard = loadAssetBankStandard(rootDir);
-  const entities = canonicalJob.entities || {};
+  const authorityState = createReferenceAuthorityState(canonicalJob);
+  const uploads = authorityState.report.runtime_expected_uploads;
 
   const refs = {
     subject: [],
@@ -83,15 +81,16 @@ function resolveReferences(canonicalJob, options = {}) {
     accessory: [],
   };
 
-  if (subjectUsesReference(entities.subject)) {
-    assertStandardId(standard, 'subject', entities.subject.reference_id);
+  if (uploads.subject.length > 0) {
+    const referenceId = uploads.subject[0];
+    assertStandardId(standard, 'subject', referenceId);
     refs.subject = resolveImageAsset(
       getCandidateDirsForEntity(standard, rootDir, 'subject'),
-      entities.subject.reference_id
+      referenceId
     );
   }
 
-  const materialDetailRefs = ensureArray(entities.garment?.detail_refs?.material);
+  const materialDetailRefs = ensureArray(uploads.garment?.material);
   for (const detailId of materialDetailRefs) {
     assertStandardId(standard, 'garmentMaterial', detailId);
     refs.garment.material.push(
@@ -102,7 +101,7 @@ function resolveReferences(canonicalJob, options = {}) {
     );
   }
 
-  const patternDetailRefs = ensureArray(entities.garment?.detail_refs?.pattern);
+  const patternDetailRefs = ensureArray(uploads.garment?.pattern);
   for (const detailId of patternDetailRefs) {
     assertStandardId(standard, 'garmentPattern', detailId);
     refs.garment.pattern.push(
@@ -113,27 +112,25 @@ function resolveReferences(canonicalJob, options = {}) {
     );
   }
 
-  if (entities.footwear?.mode !== 'ignore' && entities.footwear?.asset_id) {
-    assertStandardId(standard, 'footwear', entities.footwear.asset_id);
+  if (uploads.footwear.length > 0) {
+    const footwearAssetId = uploads.footwear[0];
+    assertStandardId(standard, 'footwear', footwearAssetId);
     refs.footwear = resolveImageAsset(
       getCandidateDirsForEntity(standard, rootDir, 'footwear'),
-      entities.footwear.asset_id
+      footwearAssetId
     );
   }
 
-  if (entities.headwear?.mode !== 'ignore' && entities.headwear?.mode !== 'remove' && entities.headwear?.asset_id) {
-    assertStandardId(standard, 'headwear', entities.headwear.asset_id);
+  if (uploads.headwear.length > 0) {
+    const headwearAssetId = uploads.headwear[0];
+    assertStandardId(standard, 'headwear', headwearAssetId);
     refs.headwear = resolveImageAsset(
       getCandidateDirsForEntity(standard, rootDir, 'headwear'),
-      entities.headwear.asset_id
+      headwearAssetId
     );
   }
 
-  for (const item of entities.accessory?.items || []) {
-    if (!item || item.mode === 'ignore' || item.mode === 'remove' || !item.asset_id) {
-      continue;
-    }
-
+  for (const item of uploads.accessory || []) {
     assertStandardId(standard, 'accessory', item.asset_id, item.family);
     const candidateDirs = getCandidateDirsForEntity(standard, rootDir, 'accessory', item.family);
 

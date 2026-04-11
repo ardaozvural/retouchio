@@ -31,6 +31,7 @@ module.exports = {
     }
 
     const variantLabel = entity.variant || 'requested headwear';
+    const referenceAuthorityActive = Boolean(entity.reference_authority_active);
 
     if (entity.mode === 'preserve') {
       return [
@@ -71,11 +72,11 @@ module.exports = {
       lines.push('Do not preserve incompatible original headwear once replacement is active.');
     }
 
-    if (slotConfig?.referenceBindingText && entity.asset_id) {
+    if (referenceAuthorityActive && slotConfig?.referenceBindingText) {
       lines.push(slotConfig.referenceBindingText);
     }
 
-    if (Array.isArray(slotConfig?.rules) && slotConfig.rules.length > 0) {
+    if (referenceAuthorityActive && Array.isArray(slotConfig?.rules) && slotConfig.rules.length > 0) {
       lines.push(...slotConfig.rules);
     } else if (entity.variant && GENERIC_VARIANT_LINES[entity.variant]) {
       lines.push(...GENERIC_VARIANT_LINES[entity.variant]);

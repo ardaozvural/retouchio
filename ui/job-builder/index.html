@@ -139,6 +139,109 @@
 
                   <div id="productShellContent" class="product-shell-content"></div>
                 </section>
+
+                <section class="card shell-card advanced-shell production-panel production-panel-advanced" aria-labelledby="advancedAuthoringTitle">
+                  <div class="shell-section-header shell-section-header-inline shell-section-header-compact-card">
+                    <div class="section-title-row">
+                      <h2 id="advancedAuthoringTitle">Gelişmiş</h2>
+                      <span class="section-info" aria-hidden="true">i</span>
+                    </div>
+                    <span class="section-kicker">İsteğe bağlı</span>
+                  </div>
+
+                  <div class="advanced-stack">
+                    <details class="card-subpanel" open>
+                      <summary>Derleme Davranışı</summary>
+                      <div class="card-subpanel-body advanced-section-body">
+                        <p class="advanced-section-copy">Sahne, çıktı profili ve negatif kurallar derlemeyi gerçekten etkiler. Buradaki alanlar gizli artık davranmaz.</p>
+                        <div class="advanced-grid">
+                          <label class="field">
+                            <span>İş Kimliği</span>
+                            <input id="jobId" type="text" />
+                            <p class="field-hint">Kaydetme, batch adı üretimi ve çalışma izi için kullanılır.</p>
+                          </label>
+                          <label class="field">
+                            <span>İş Adı</span>
+                            <input id="displayName" type="text" />
+                            <p class="field-hint">Taslak ve çalışma listelerinde görünen ad.</p>
+                          </label>
+                          <label class="field">
+                            <span>Sahne Davranışı</span>
+                            <select id="sceneMode"></select>
+                          </label>
+                          <label class="field">
+                            <span>Sahne Profili</span>
+                            <select id="sceneProfile"></select>
+                          </label>
+                          <label class="field">
+                            <span>Çıktı Profili</span>
+                            <select id="outputProfileMode"></select>
+                          </label>
+                          <label class="field">
+                            <span>Çıktı Boyutu</span>
+                            <select id="outputProfileProfile"></select>
+                            <p id="outputTypeHint" class="field-hint"></p>
+                          </label>
+                        </div>
+                        <div class="advanced-negative-shell">
+                          <label class="field">
+                            <span>Negatif Kural Davranışı</span>
+                            <select id="globalNegativeMode"></select>
+                          </label>
+                          <label class="field field-wide">
+                            <span>Negatif Kurallar</span>
+                            <textarea id="globalNegativeItems" rows="5" placeholder="Her satıra bir kural ekleyin"></textarea>
+                            <p class="field-hint">Prompt derlemesine satır bazlı negatif kural listesi olarak yazılır.</p>
+                          </label>
+                        </div>
+                      </div>
+                    </details>
+
+                    <details class="card-subpanel">
+                      <summary>Ek Stil Satırları</summary>
+                      <div class="card-subpanel-body advanced-section-body">
+                        <p class="advanced-section-copy">Ana stil kartları dışında ek aksesuar öğeleri gerekiyorsa burada açıkça ekleyin. Bu satırlar kanonik accessory.items dizisine yazılır.</p>
+                        <div id="accessoryItemsContainer" class="advanced-accessory-shell">
+                          <div id="accessoryItems"></div>
+                          <button id="addAccessoryButton" class="button button-secondary button-small" type="button">Ek Satır Ekle</button>
+                        </div>
+                      </div>
+                    </details>
+
+                    <details class="card-subpanel">
+                      <summary>Taslak ve İnceleme Araçları</summary>
+                      <div class="card-subpanel-body advanced-section-body">
+                        <p class="advanced-section-copy">Kaydetme, örnek yükleme ve ham compile çıktısı inceleme araçları desteklenen akışın parçasıdır; artık gizli değildir.</p>
+                        <div class="advanced-grid advanced-grid-tools">
+                          <label class="field">
+                            <span>Kayıtlı Taslak</span>
+                            <select id="savedJobSelect"></select>
+                          </label>
+                          <div class="advanced-inline-actions">
+                            <button id="saveJobButton" class="button button-secondary" type="button">Taslağı Kaydet</button>
+                            <button id="loadSavedJobButton" class="button button-outline" type="button">Taslağı Yükle</button>
+                          </div>
+                          <label class="field">
+                            <span>Örnek İş</span>
+                            <select id="sampleJobSelect"></select>
+                          </label>
+                          <div class="advanced-inline-actions">
+                            <button id="loadSampleButton" class="button button-secondary" type="button">Örneği Yükle</button>
+                            <button id="resetDefaultButton" class="button button-outline" type="button">Varsayılanı Yükle</button>
+                          </div>
+                        </div>
+                        <div class="advanced-tool-strip">
+                          <button id="openCanonicalInspectButton" class="button button-outline button-small" type="button">Kanonik JSON'u Gör</button>
+                          <button id="openPromptInspectButton" class="button button-outline button-small" type="button">Prompt'u Gör</button>
+                          <button id="copyJsonButton" class="button button-outline button-small" type="button">JSON Kopyala</button>
+                          <button id="downloadJsonButton" class="button button-outline button-small" type="button">JSON İndir</button>
+                          <button id="copyPromptButton" class="button button-outline button-small" type="button">Promptu Kopyala</button>
+                        </div>
+                        <p class="field-hint">Ham kanonik JSON ve derlenen prompt, aşağıdaki Derleme İncelemesi alanında da sekme bazlı görüntülenir.</p>
+                      </div>
+                    </details>
+                  </div>
+                </section>
               </section>
 
               <section class="production-result-stage" aria-label="Çıktı akışı">
@@ -201,7 +304,15 @@
                   </div>
 
                   <div class="result-hero-block production-preview-stage">
-                    <div id="heroPreviewCompare" class="hero-preview-shell is-compare">
+                    <div id="resultLifecycleState" class="result-lifecycle-state is-pending">
+                      <span class="result-lifecycle-dot" aria-hidden="true"></span>
+                      <div class="result-lifecycle-copy">
+                        <strong id="resultLifecycleLabel">Henüz işlenmedi</strong>
+                        <p id="resultLifecycleHelper">Toplu çalışma başladığında durum aynı kart içinde güncellenecek.</p>
+                      </div>
+                    </div>
+
+                    <div id="heroPreviewCompare" class="hero-preview-shell is-input-only">
                       <section class="hero-preview-pane">
                         <div class="hero-preview-frame">
                           <p class="hero-preview-label hero-preview-label-before">Önce</p>
@@ -235,8 +346,6 @@
             </section>
 
             <div class="hidden-ui-store" aria-hidden="true">
-              <input id="jobId" type="text" />
-              <input id="displayName" type="text" />
               <div id="inputSourceSummary"></div>
 
               <select id="workflowType">
@@ -360,32 +469,12 @@
 
               <select id="accessoryMode"></select>
               <div id="accessoryCard"></div>
-              <div id="accessoryItemsContainer"></div>
-              <div id="accessoryItems"></div>
-              <button id="addAccessoryButton" type="button">Add Row</button>
-
-              <select id="sceneMode"></select>
-              <select id="sceneProfile"></select>
-              <select id="outputProfileMode"></select>
-              <select id="outputProfileProfile"></select>
-              <p id="outputTypeHint"></p>
-              <select id="globalNegativeMode"></select>
-              <textarea id="globalNegativeItems"></textarea>
 
               <div id="reviewSummary"></div>
-
-              <button id="resetDefaultButton" type="button">Sıfırla</button>
-              <button id="loadSampleButton" type="button">Örneği Yükle</button>
-              <button id="saveJobButton" type="button">Taslağı Kaydet</button>
-              <select id="savedJobSelect"></select>
-              <button id="loadSavedJobButton" type="button">Taslağı Yükle</button>
-              <button id="copyJsonButton" type="button">Copy JSON</button>
-              <button id="downloadJsonButton" type="button">JSON İndir</button>
-              <button id="copyPromptButton" type="button">Copy Prompt</button>
-
-              <div id="developerToolsCard"></div>
               <ul id="generatedJobsList"></ul>
               <ul id="sampleJobsList"></ul>
+
+              <div id="developerToolsCard"></div>
               <pre id="promptPreview"></pre>
               <pre id="jsonPreview"></pre>
 

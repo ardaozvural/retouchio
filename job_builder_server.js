@@ -24,6 +24,16 @@ const {
   listBatchRecords,
   upsertBatchRecord,
   getBatchRecord,
+  upsertRunRecord,
+  getRunRecord,
+  listRunAttempts,
+  upsertOutputRecords,
+  listOutputRecords,
+  getOutputRecord,
+  approveOutputRecord,
+  rejectOutputRecord,
+  getBatchOutputSummary,
+  getRunOutputSummary,
 } = require('./prompt_system/compiler/batchRegistry');
 const {
   safeBatchDirName,
@@ -31,6 +41,11 @@ const {
   resolveBatchOutputReadDir,
   buildBatchOutputImageUrl,
 } = require('./prompt_system/compiler/batchOutputPaths');
+const {
+  stageRunInputs,
+  toPortableRelative,
+  makeRunId,
+} = require('./prompt_system/compiler/runStaging');
 
 const PORT = Number(process.env.PORT || 3000);
 const ROOT_DIR = __dirname;
@@ -124,6 +139,24 @@ function uniqueStrings(values = []) {
   return [...new Set(values.filter(Boolean).map((item) => String(item)))];
 }
 
+function resolveJobId(job) {
+  return String(job?.jobId || job?.displayName || '').trim() || null;
+}
+
+function makeAttemptId(existingAttempts = []) {
+  const numericIds = existingAttempts
+    .map((item) => String(item?.attemptId || '').trim())
+    .map((value) => value.match(/^attempt_(\d+)$/)?.[1] || null)
+    .map((value) => (value ? Number(value) : null))
+    .filter((value) => Number.isFinite(value));
+  const next = numericIds.length > 0 ? Math.max(...numericIds) + 1 : 1;
+  return `attempt_${String(next).padStart(3, '0')}`;
+}
+
+function buildAttemptStageRunId(runId, attemptId) {
+  return `${String(runId || 'run').trim()}__${String(attemptId || 'attempt').trim()}`;
+}
+
 function ensureDir(dirPath) {
   if (!fs.existsSync(dirPath)) {
     fs.mkdirSync(dirPath, { recursive: true });
@@ -154,10 +187,16 @@ function isTerminalBatchState(rawState) {
 
 function decorateBatchRecord(record) {
   const normalized = normalizeBatchState(record?.lastKnownState);
+  const hydratedRun = record?.runId ? (getRunRecord(ROOT_DIR, record.runId) || ensureRunRecordFromBatchRecord(record)) : null;
+  const outputSummary = getBatchOutputSummary(ROOT_DIR, record?.batchName || '');
+  const runSummary = record?.runId ? getRunOutputSummary(ROOT_DIR, record.runId) : getBatchOutputSummary(ROOT_DIR, record?.batchName || '');
   return {
     ...record,
     status: normalized,
     downloadNeeded: normalized === 'SUCCEEDED' && !record?.downloaded,
+    outputSummary,
+    runSummary,
+    runRecord: hydratedRun,
   };
 }
 
@@ -967,7 +1006,7 @@ function buildValidationAndCompile(inputJob, registry) {
     };
   }
 
-  const { prompt, canonicalJob, imageConfig } = buildPrompt(inputJob, { rootDir: ROOT_DIR });
+  const { prompt, canonicalJob, imageConfig, authority } = buildPrompt(inputJob, { rootDir: ROOT_DIR });
   if (!prompt || prompt.length < 50) {
     return {
       ok: false,
@@ -982,6 +1021,7 @@ function buildValidationAndCompile(inputJob, registry) {
     prompt,
     canonicalJob,
     imageConfig,
+    authority,
   };
 }
 
@@ -1008,6 +1048,18 @@ function buildRequestItemsFromInputFiles(inputFiles = []) {
     index,
     key: path.parse(file).name || null,
     inputFile: file,
+  }));
+}
+
+function buildRequestItemsFromStageMappings(mappings = []) {
+  return mappings.map((item) => ({
+    index: item.index,
+    key: item.requestKey,
+    inputFile: item.fileName,
+    originalInputFile: item.fileName,
+    originalInputPath: item.originalInputPath,
+    stagedInputFile: item.fileName,
+    stagedInputPath: item.stagedInputPath,
   }));
 }
 
@@ -1039,14 +1091,269 @@ function snapshotBatchInput(canonicalJob) {
   const dirExists = fs.existsSync(resolved.dirPath) && fs.statSync(resolved.dirPath).isDirectory();
   const allInputFiles = dirExists ? listImageFiles(resolved.dirPath) : [];
   const inputFiles = allInputFiles.slice(0, EDIT_RUNTIME_MAX_BATCH);
-  const requestItems = buildRequestItemsFromInputFiles(inputFiles);
 
   return {
     inputSource: resolved.inputSource,
+    inputDir: resolved.dirPath,
     inputFiles,
-    requestItems,
-    requestKeyToInputFile: buildRequestKeyToInputFile(requestItems),
+    originalInputFiles: buildRequestItemsFromInputFiles(inputFiles).map((item) => ({
+      index: item.index,
+      fileName: item.inputFile,
+      requestKey: item.key,
+      relativePath: toPortableRelative(ROOT_DIR, path.join(resolved.dirPath, item.inputFile)),
+    })),
     capturedAt: new Date().toISOString(),
+  };
+}
+
+function buildRunAttemptPlan({ job, sourceJobFile, inputSnapshot, requestItems, originalInputFiles, runId = null }) {
+  const nextRunId = String(runId || makeRunId()).trim();
+  const existingRun = getRunRecord(ROOT_DIR, nextRunId);
+  const existingAttempts = listRunAttempts(ROOT_DIR, nextRunId);
+  const attemptId = makeAttemptId(existingAttempts);
+  const jobId = resolveJobId(job) || existingRun?.jobId || existingRun?.sourceJobId || null;
+  const stableRequestItems = Array.isArray(existingRun?.requestItems) && existingRun.requestItems.length > 0
+    ? existingRun.requestItems
+    : requestItems;
+  const stableOriginalInputFiles = Array.isArray(existingRun?.originalInputFiles) && existingRun.originalInputFiles.length > 0
+    ? existingRun.originalInputFiles
+    : originalInputFiles;
+  const stableInputFiles = Array.isArray(existingRun?.inputFiles) && existingRun.inputFiles.length > 0
+    ? existingRun.inputFiles
+    : inputSnapshot.inputFiles;
+  const requestKeyToInputFile = Object.keys(existingRun?.requestKeyToInputFile || {}).length > 0
+    ? existingRun.requestKeyToInputFile
+    : buildRequestKeyToInputFile(stableRequestItems);
+
+  const runRecord = upsertRunRecord(ROOT_DIR, {
+    runId: nextRunId,
+    jobId,
+    sourceJobId: jobId,
+    sourceJobFile: existingRun?.sourceJobFile || sourceJobFile,
+    inputSource: existingRun?.inputSource || inputSnapshot.inputSource,
+    inputFiles: stableInputFiles,
+    requestItems: stableRequestItems,
+    requestKeyToInputFile,
+    originalInputFiles: stableOriginalInputFiles,
+    latestAttemptId: attemptId,
+    status: 'pending',
+    attemptCount: existingAttempts.length + 1,
+  });
+
+  return {
+    runId: nextRunId,
+    attemptId,
+    requestKeyToInputFile,
+    runRecord,
+  };
+}
+
+function resolveRootRelativePath(relativePath, label = 'path') {
+  const normalized = String(relativePath || '').trim();
+  if (!normalized) {
+    throw new Error(`${label} is required.`);
+  }
+
+  const resolvedRoot = path.resolve(ROOT_DIR);
+  const candidate = path.resolve(ROOT_DIR, normalized);
+  if (!(candidate === resolvedRoot || candidate.startsWith(`${resolvedRoot}${path.sep}`))) {
+    throw new Error(`Invalid ${label}.`);
+  }
+  return candidate;
+}
+
+function loadCanonicalJobFromSourceFile(sourceJobFile) {
+  const filePath = resolveRootRelativePath(sourceJobFile, 'sourceJobFile');
+  if (!fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) {
+    throw new Error(`Canonical job file not found: ${sourceJobFile}`);
+  }
+  return mergeDefaultJob(readJson(filePath));
+}
+
+function syncRunRecordStatus(runId, status, batchRecord = null) {
+  const normalizedRunId = String(runId || batchRecord?.runId || '').trim();
+  if (!normalizedRunId) {
+    return null;
+  }
+
+  const existingRun = getRunRecord(ROOT_DIR, normalizedRunId);
+  if (!existingRun) {
+    return null;
+  }
+
+  return upsertRunRecord(ROOT_DIR, {
+    ...existingRun,
+    latestAttemptId: batchRecord?.attemptId || existingRun.latestAttemptId,
+    latestBatchName: batchRecord?.batchName || existingRun.latestBatchName,
+    status: status || batchRecord?.lastKnownState || existingRun.status,
+    attemptCount: Math.max(existingRun.attemptCount || 0, listRunAttempts(ROOT_DIR, normalizedRunId).length),
+  });
+}
+
+function ensureRunRecordFromBatchRecord(batchRecord) {
+  if (!batchRecord) {
+    return null;
+  }
+
+  const manifest = readBatchManifest(batchRecord.batchName);
+  const runId = String(batchRecord.runId || manifest?.runId || '').trim();
+  if (!runId) {
+    return null;
+  }
+
+  const existing = getRunRecord(ROOT_DIR, runId);
+  if (existing) {
+    return existing;
+  }
+
+  return upsertRunRecord(ROOT_DIR, {
+    runId,
+    jobId: batchRecord.jobId || manifest?.jobId || manifest?.sourceJobId || null,
+    sourceJobId: batchRecord.sourceJobId || manifest?.sourceJobId || manifest?.jobId || null,
+    sourceJobFile: batchRecord.sourceJobFile || manifest?.sourceJobFile || null,
+    inputSource: batchRecord.inputSource || manifest?.inputSource || null,
+    inputFiles: Array.isArray(manifest?.inputFiles) ? manifest.inputFiles : [],
+    requestItems: Array.isArray(manifest?.requestItems) ? manifest.requestItems : [],
+    requestKeyToInputFile: manifest?.requestKeyToInputFile || {},
+    originalInputFiles: Array.isArray(manifest?.originalInputFiles) ? manifest.originalInputFiles : [],
+    latestAttemptId: batchRecord.attemptId || manifest?.attemptId || null,
+    latestBatchName: batchRecord.batchName || null,
+    status: batchRecord.lastKnownState || 'pending',
+    attemptCount: Math.max(1, listRunAttempts(ROOT_DIR, runId).length),
+  });
+}
+
+function resolveRetryContext({ runId, batchName }) {
+  let batchRecord = null;
+  const normalizedBatchName = String(batchName || '').trim();
+  if (normalizedBatchName) {
+    batchRecord = getBatchRecord(ROOT_DIR, normalizedBatchName);
+    if (!batchRecord) {
+      throw new Error(`Batch not found: ${normalizedBatchName}`);
+    }
+  }
+
+  const requestedRunId = String(runId || batchRecord?.runId || '').trim();
+  let runRecord = requestedRunId ? getRunRecord(ROOT_DIR, requestedRunId) : null;
+  if (!runRecord && batchRecord) {
+    runRecord = ensureRunRecordFromBatchRecord(batchRecord);
+  }
+  if (!runRecord && requestedRunId) {
+    const attempts = listRunAttempts(ROOT_DIR, requestedRunId);
+    const fallbackBatch = attempts[attempts.length - 1] || null;
+    if (fallbackBatch) {
+      batchRecord = batchRecord || fallbackBatch;
+      runRecord = ensureRunRecordFromBatchRecord(fallbackBatch);
+    }
+  }
+
+  if (!runRecord) {
+    const lookupLabel = requestedRunId || normalizedBatchName || 'retry target';
+    throw new Error(`Run not found for ${lookupLabel}.`);
+  }
+
+  if (!batchRecord && runRecord.latestBatchName) {
+    batchRecord = getBatchRecord(ROOT_DIR, runRecord.latestBatchName) || null;
+  }
+
+  return {
+    runRecord,
+    batchRecord,
+  };
+}
+
+function buildRetryInputSnapshot(runRecord, requestKey = null) {
+  const resolved = resolveInputSourceDir(ROOT_DIR, runRecord?.inputSource || 'batch_input');
+  const requestedKey = String(requestKey || '').trim();
+  const requestKeyMap = runRecord?.requestKeyToInputFile && typeof runRecord.requestKeyToInputFile === 'object'
+    ? { ...runRecord.requestKeyToInputFile }
+    : {};
+
+  let inputFiles = [];
+  if (requestedKey) {
+    const mappedFile = String(
+      requestKeyMap[requestedKey]
+      || runRecord?.originalInputFiles?.find((item) => String(item?.requestKey || '').trim() === requestedKey)?.fileName
+      || ''
+    ).trim();
+    if (!mappedFile) {
+      throw new Error(`requestKey not found for retry: ${requestedKey}`);
+    }
+    inputFiles = [mappedFile];
+  } else if (Array.isArray(runRecord?.inputFiles) && runRecord.inputFiles.length > 0) {
+    inputFiles = runRecord.inputFiles.slice();
+  } else if (Array.isArray(runRecord?.requestItems) && runRecord.requestItems.length > 0) {
+    inputFiles = runRecord.requestItems.map((item) => item?.inputFile).filter(Boolean);
+  } else {
+    inputFiles = Object.values(requestKeyMap).filter(Boolean);
+  }
+
+  inputFiles = uniqueStrings(inputFiles);
+  if (inputFiles.length === 0) {
+    throw new Error('No retryable input files were found for this run.');
+  }
+
+  const originalByFile = new Map();
+  const originalByKey = new Map();
+  for (const entry of Array.isArray(runRecord?.originalInputFiles) ? runRecord.originalInputFiles : []) {
+    const fileName = String(entry?.fileName || '').trim();
+    const key = String(entry?.requestKey || '').trim();
+    if (fileName && !originalByFile.has(fileName)) {
+      originalByFile.set(fileName, entry);
+    }
+    if (key && !originalByKey.has(key)) {
+      originalByKey.set(key, entry);
+    }
+  }
+
+  const originalInputFiles = inputFiles.map((fileName, index) => {
+    const absolutePath = path.join(resolved.dirPath, fileName);
+    if (!fs.existsSync(absolutePath) || !fs.statSync(absolutePath).isFile()) {
+      throw new Error(`Retry input file is missing from source library: ${fileName}`);
+    }
+    const matched = originalByFile.get(fileName) || originalByKey.get(path.parse(fileName).name) || null;
+    return {
+      index,
+      fileName,
+      requestKey: matched?.requestKey || path.parse(fileName).name || null,
+      inputSource: resolved.inputSource,
+      relativePath: matched?.relativePath || toPortableRelative(ROOT_DIR, absolutePath),
+    };
+  });
+
+  return {
+    inputSource: resolved.inputSource,
+    inputDir: resolved.dirPath,
+    inputFiles,
+    originalInputFiles,
+    capturedAt: new Date().toISOString(),
+  };
+}
+
+function writeRuntimeJobForStagedRun(canonicalJob, sourceJobRelativePath, inputSnapshot, stagedRun, identifiers = {}) {
+  const runtimeJob = JSON.parse(JSON.stringify(canonicalJob || {}));
+  runtimeJob.inputSource = stagedRun.stagedInputSource;
+  runtimeJob.runtime = {
+    ...(runtimeJob.runtime && typeof runtimeJob.runtime === 'object' ? runtimeJob.runtime : {}),
+    mode: 'staged',
+    runId: identifiers.runId || stagedRun.runId,
+    attemptId: identifiers.attemptId || null,
+    stageRunId: stagedRun.runId,
+    sourceInputSource: inputSnapshot.inputSource,
+    stagedInputSource: stagedRun.stagedInputSource,
+    stageDir: stagedRun.runDirRelative,
+    batchJsonlPath: stagedRun.batchJsonlRelativePath,
+    sourceJobFile: sourceJobRelativePath,
+    originalInputFiles: stagedRun.originalInputFiles,
+    stagedInputFiles: stagedRun.stagedInputFiles,
+    stagedAt: new Date().toISOString(),
+  };
+
+  fs.writeFileSync(stagedRun.runtimeJobPath, JSON.stringify(runtimeJob, null, 2));
+
+  return {
+    filePath: stagedRun.runtimeJobPath,
+    relativePath: stagedRun.runtimeJobRelativePath,
   };
 }
 
@@ -1057,7 +1364,7 @@ function writeBatchManifest(manifest) {
   }
   const filePath = getBatchManifestPath(ROOT_DIR, safeBatchName);
   const payload = {
-    version: 1,
+    version: 3,
     createdAt: new Date().toISOString(),
     ...manifest,
     safeBatchName,
@@ -1066,6 +1373,101 @@ function writeBatchManifest(manifest) {
   return {
     filePath,
     safeBatchName,
+  };
+}
+
+async function launchBatchAttempt({ canonicalJob, sourceJobFile, inputSnapshot, runId = null }) {
+  const baseRequestItems = buildRequestItemsFromInputFiles(inputSnapshot.inputFiles);
+  const runPlan = buildRunAttemptPlan({
+    job: canonicalJob,
+    sourceJobFile,
+    inputSnapshot,
+    requestItems: baseRequestItems,
+    originalInputFiles: inputSnapshot.originalInputFiles,
+    runId,
+  });
+  const stagedRun = stageRunInputs({
+    rootDir: ROOT_DIR,
+    inputSource: inputSnapshot.inputSource,
+    inputDir: inputSnapshot.inputDir,
+    inputFiles: inputSnapshot.inputFiles,
+    runId: buildAttemptStageRunId(runPlan.runId, runPlan.attemptId),
+  });
+  const runtimeJob = writeRuntimeJobForStagedRun(
+    canonicalJob,
+    sourceJobFile,
+    inputSnapshot,
+    stagedRun,
+    {
+      runId: runPlan.runId,
+      attemptId: runPlan.attemptId,
+    }
+  );
+  const requestItems = buildRequestItemsFromStageMappings(stagedRun.mappings);
+  const runResult = await runBatchWithEdit(runtimeJob.filePath);
+
+  let batchRecord = null;
+  if (runResult.batchJobName) {
+    const now = new Date().toISOString();
+    batchRecord = upsertBatchRecord(ROOT_DIR, {
+      batchId: runResult.batchJobName,
+      batchName: runResult.batchJobName,
+      sourceJobFile,
+      sourceJobId: resolveJobId(canonicalJob),
+      jobId: resolveJobId(canonicalJob),
+      runId: runPlan.runId,
+      attemptId: runPlan.attemptId,
+      inputSource: inputSnapshot.inputSource,
+      stagedInputSource: stagedRun.stagedInputSource,
+      stageDir: stagedRun.runDirRelative,
+      runtimeJobFile: runtimeJob.relativePath,
+      inputFileCount: inputSnapshot.inputFiles.length,
+      requestCount: requestItems.length,
+      createdAt: now,
+      lastKnownState: runResult.batchState || 'UNKNOWN',
+      downloaded: false,
+      cancelled: false,
+      completedAt: isTerminalBatchState(runResult.batchState) ? now : null,
+      lastCheckedAt: now,
+      lastError: runResult.success ? null : (runResult.logsSnippet || 'Batch run failed'),
+    });
+
+    syncRunRecordStatus(runPlan.runId, runResult.batchState || 'pending', batchRecord);
+
+    try {
+      writeBatchManifest({
+        batchId: runResult.batchJobName,
+        batchName: runResult.batchJobName,
+        safeBatchName: safeBatchDirName(runResult.batchJobName),
+        sourceJobFile,
+        sourceJobId: resolveJobId(canonicalJob),
+        jobId: resolveJobId(canonicalJob),
+        inputSource: inputSnapshot.inputSource,
+        inputFiles: inputSnapshot.inputFiles,
+        stagedInputSource: stagedRun.stagedInputSource,
+        stageDir: stagedRun.runDirRelative,
+        runId: runPlan.runId,
+        attemptId: runPlan.attemptId,
+        runtimeJobFile: runtimeJob.relativePath,
+        requestItems,
+        requestKeyToInputFile: buildRequestKeyToInputFile(requestItems),
+        originalInputFiles: stagedRun.originalInputFiles,
+        stagedInputFiles: stagedRun.stagedInputFiles,
+      });
+    } catch (manifestError) {
+      logStep('job_builder.run_batch.manifest_error', manifestError.message || 'unknown');
+    }
+  } else {
+    syncRunRecordStatus(runPlan.runId, 'failed');
+  }
+
+  return {
+    runPlan,
+    stagedRun,
+    runtimeJob,
+    requestItems,
+    runResult,
+    batchRecord,
   };
 }
 
@@ -1085,11 +1487,23 @@ function buildInputPreviewUrl(inputSource, file) {
     return null;
   }
   const normalizedSource = String(inputSource || '').trim();
-  if (normalizedSource === 'batch_input') {
-    return `/batch_input/${safeFile}`;
+  if (!normalizedSource) {
+    return null;
   }
-  if (normalizedSource.startsWith('inputs/')) {
-    return `/${normalizedSource.replace(/^\/+/, '')}/${safeFile}`;
+  return buildPreviewUrlFromRelativePath(`${normalizedSource.replace(/^\/+/, '')}/${safeFile}`);
+}
+
+function buildPreviewUrlFromRelativePath(relativePath) {
+  const normalized = String(relativePath || '').trim().replace(/\\/g, '/').replace(/^\/+/, '');
+  if (!normalized) {
+    return null;
+  }
+  if (
+    normalized.startsWith('batch_input/')
+    || normalized.startsWith('inputs/')
+    || normalized.startsWith('staging/')
+  ) {
+    return `/${normalized}`;
   }
   return null;
 }
@@ -1127,12 +1541,13 @@ function parseBatchResultMetadata(outputDirPath) {
   };
 }
 
-function buildBatchOutputList(rootDir, batchName) {
+function buildAttemptOutputList(rootDir, batchName) {
   const normalizedBatchName = String(batchName || '').trim();
   if (!normalizedBatchName) {
     throw new Error('batchName is required.');
   }
 
+  const batchRecord = getBatchRecord(rootDir, normalizedBatchName);
   const outputReadTarget = resolveBatchOutputReadDir(rootDir, normalizedBatchName);
   const safeBatchName = outputReadTarget.safeBatchName;
   const resolvedOutputDir = outputReadTarget.outputDir;
@@ -1187,25 +1602,54 @@ function buildBatchOutputList(rootDir, batchName) {
   const manifestInputSource = String(manifest?.inputSource || '').trim();
   const manifestInputFiles = Array.isArray(manifest?.inputFiles) ? manifest.inputFiles.slice() : [];
   const requestItems = Array.isArray(manifest?.requestItems) ? manifest.requestItems.slice() : [];
+  const stagedInputFiles = Array.isArray(manifest?.stagedInputFiles) ? manifest.stagedInputFiles.slice() : [];
   const requestKeyToInputFile = manifest?.requestKeyToInputFile && typeof manifest.requestKeyToInputFile === 'object'
     ? { ...manifest.requestKeyToInputFile }
     : {};
+  const stagedInputByKey = new Map();
+  const stagedInputByOriginalFile = new Map();
+  for (const entry of stagedInputFiles) {
+    const key = String(entry?.requestKey || '').trim();
+    const originalFile = String(entry?.originalInputFile || entry?.fileName || '').trim();
+    if (key && !stagedInputByKey.has(key)) {
+      stagedInputByKey.set(key, entry);
+    }
+    if (originalFile && !stagedInputByOriginalFile.has(originalFile)) {
+      stagedInputByOriginalFile.set(originalFile, entry);
+    }
+  }
 
   const inputUsed = new Set();
   const keyUsed = new Set();
   const items = [];
 
-  function buildInputNode(file) {
-    if (!file) {
-      return null;
-    }
-    const safeFile = path.basename(String(file));
+  function buildInputContext(file, requestItem, key) {
+    const safeFile = path.basename(String(file || requestItem?.inputFile || requestItem?.originalInputFile || '').trim());
+    const stagedMeta = (key ? stagedInputByKey.get(key) : null) || (safeFile ? stagedInputByOriginalFile.get(safeFile) : null) || null;
+    return {
+      file: safeFile || null,
+      originalInputPath: String(requestItem?.originalInputPath || stagedMeta?.originalInputPath || '').trim() || null,
+      stagedInputPath: String(requestItem?.stagedInputPath || stagedMeta?.relativePath || stagedMeta?.stagedInputPath || '').trim() || null,
+    };
+  }
+
+  function buildInputNode(file, inputContext = null) {
+    const safeFile = path.basename(String(file || inputContext?.file || '').trim());
     if (!safeFile) {
       return null;
     }
+    const originalInputPath = String(inputContext?.originalInputPath || '').trim()
+      || `${String(manifestInputSource || '').trim().replace(/^\/+/, '')}/${safeFile}`;
+    const stagedInputPath = String(inputContext?.stagedInputPath || '').trim() || null;
     return {
       file: safeFile,
-      url: buildInputPreviewUrl(manifestInputSource, safeFile),
+      originalPath: originalInputPath,
+      stagedPath: stagedInputPath,
+      url: buildPreviewUrlFromRelativePath(stagedInputPath)
+        || buildPreviewUrlFromRelativePath(originalInputPath)
+        || buildInputPreviewUrl(manifestInputSource, safeFile),
+      originalUrl: buildPreviewUrlFromRelativePath(originalInputPath),
+      stagedUrl: buildPreviewUrlFromRelativePath(stagedInputPath),
     };
   }
 
@@ -1219,6 +1663,7 @@ function buildBatchOutputList(rootDir, batchName) {
     }
     return {
       file: safeFile,
+      path: path.posix.join(relativeOutputDir, safeFile),
       url: buildBatchOutputImageUrl(outputSource, safeBatchName, safeFile),
     };
   }
@@ -1237,13 +1682,14 @@ function buildBatchOutputList(rootDir, batchName) {
     if (!key && !inputFile) {
       continue;
     }
+    const inputContext = buildInputContext(inputFile, requestItem, key);
     const outputEntry = key ? consumeOutputByKey(key) : null;
     if (inputFile) {
       markInputUsed(inputFile);
     }
     items.push({
       key,
-      input: buildInputNode(inputFile),
+      input: buildInputNode(inputFile, inputContext),
       output: outputEntry ? buildOutputNode(outputEntry.file) : null,
     });
     if (key) {
@@ -1259,13 +1705,14 @@ function buildBatchOutputList(rootDir, batchName) {
       if (!key && !inputFile) {
         continue;
       }
+      const inputContext = buildInputContext(inputFile, null, key);
       const outputEntry = key ? consumeOutputByKey(key) : null;
       if (inputFile) {
         markInputUsed(inputFile);
       }
       items.push({
         key,
-        input: buildInputNode(inputFile),
+        input: buildInputNode(inputFile, inputContext),
         output: outputEntry ? buildOutputNode(outputEntry.file) : null,
       });
       if (key) {
@@ -1278,13 +1725,14 @@ function buildBatchOutputList(rootDir, batchName) {
   const remainingInputs = manifestInputFiles.filter((file) => !inputUsed.has(String(file)));
   for (const inputFile of remainingInputs) {
     const outputEntry = consumeNextOutput();
+    const trackedKey = outputEntry?.key || path.parse(String(inputFile)).name || null;
+    const inputContext = buildInputContext(inputFile, null, trackedKey);
     markInputUsed(inputFile);
     items.push({
-      key: outputEntry?.key || path.parse(String(inputFile)).name || null,
-      input: buildInputNode(inputFile),
+      key: trackedKey,
+      input: buildInputNode(inputFile, inputContext),
       output: outputEntry ? buildOutputNode(outputEntry.file) : null,
     });
-    const trackedKey = outputEntry?.key || path.parse(String(inputFile)).name || null;
     if (trackedKey) {
       keyUsed.add(trackedKey);
     }
@@ -1313,12 +1761,13 @@ function buildBatchOutputList(rootDir, batchName) {
     if (!outputEntry && !inputFile) {
       continue;
     }
+    const inputContext = buildInputContext(inputFile, null, key);
     if (inputFile) {
       markInputUsed(inputFile);
     }
     items.push({
       key: key || null,
-      input: buildInputNode(inputFile),
+      input: buildInputNode(inputFile, inputContext),
       output: outputEntry ? buildOutputNode(outputEntry.file) : null,
     });
     if (key) {
@@ -1337,15 +1786,20 @@ function buildBatchOutputList(rootDir, batchName) {
 
   const fallbackInputs = manifestInputFiles.filter((file) => !inputUsed.has(String(file)));
   for (const inputFile of fallbackInputs) {
+    const inputContext = buildInputContext(inputFile, null, path.parse(String(inputFile)).name || null);
     items.push({
       key: path.parse(String(inputFile)).name || null,
-      input: buildInputNode(inputFile),
+      input: buildInputNode(inputFile, inputContext),
       output: null,
     });
   }
 
   return {
     batchName: normalizedBatchName,
+    batchId: batchRecord?.batchId || normalizedBatchName,
+    runId: batchRecord?.runId || null,
+    attemptId: batchRecord?.attemptId || null,
+    jobId: batchRecord?.jobId || batchRecord?.sourceJobId || manifest?.sourceJobId || null,
     safeBatchName,
     outputDir: relativeOutputDir,
     outputSource,
@@ -1355,6 +1809,98 @@ function buildBatchOutputList(rootDir, batchName) {
       manifestRequestItems: requestItems.length,
       manifestInputCount: manifestInputFiles.length,
       batchResultKeys: metadata.keys.length,
+    },
+    batchRecord,
+    manifest,
+  };
+}
+
+function syncOutputRegistryForAttempt(attemptPayload) {
+  const items = Array.isArray(attemptPayload?.items) ? attemptPayload.items : [];
+  const outputRecords = items
+    .filter((item) => item?.output?.path)
+    .map((item) => ({
+      jobId: attemptPayload.jobId,
+      runId: attemptPayload.runId,
+      attemptId: attemptPayload.attemptId,
+      batchId: attemptPayload.batchId,
+      batchName: attemptPayload.batchName,
+      requestKey: item.key || null,
+      inputPath: item?.input?.originalPath || null,
+      stagedInputPath: item?.input?.stagedPath || null,
+      outputPath: item.output.path,
+      outputFile: item.output.file,
+    }));
+
+  const syncedRecords = upsertOutputRecords(ROOT_DIR, outputRecords);
+  const recordsByPath = new Map(
+    syncedRecords
+      .filter((item) => item?.outputPath)
+      .map((item) => [String(item.outputPath), item])
+  );
+
+  attemptPayload.items = items.map((item) => {
+    const matched = item?.output?.path ? recordsByPath.get(String(item.output.path)) : null;
+    return {
+      ...item,
+      outputId: matched?.outputId || null,
+      review_state: matched?.review_state || 'in_review',
+      is_final: Boolean(matched?.is_final),
+    };
+  });
+
+  attemptPayload.outputSummary = getBatchOutputSummary(ROOT_DIR, attemptPayload.batchName);
+  return attemptPayload;
+}
+
+function buildBatchOutputList(rootDir, batchName) {
+  const normalizedBatchName = String(batchName || '').trim();
+  if (!normalizedBatchName) {
+    throw new Error('batchName is required.');
+  }
+
+  const currentRecord = getBatchRecord(rootDir, normalizedBatchName);
+  if (currentRecord) {
+    ensureRunRecordFromBatchRecord(currentRecord);
+  }
+  const runId = currentRecord?.runId || null;
+  const attemptRecords = runId
+    ? listRunAttempts(rootDir, runId).slice().sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))
+    : (currentRecord ? [currentRecord] : []);
+  attemptRecords.forEach((record) => ensureRunRecordFromBatchRecord(record));
+
+  const attempts = attemptRecords.length > 0
+    ? attemptRecords.map((record) => syncOutputRegistryForAttempt(buildAttemptOutputList(rootDir, record.batchName)))
+    : [syncOutputRegistryForAttempt(buildAttemptOutputList(rootDir, normalizedBatchName))];
+
+  const currentAttempt = attempts.find((item) => item.batchName === normalizedBatchName) || attempts[0];
+
+  return {
+    batchName: normalizedBatchName,
+    runId: currentAttempt?.runId || runId || null,
+    safeBatchName: currentAttempt?.safeBatchName || safeBatchDirName(normalizedBatchName),
+    outputDir: currentAttempt?.outputDir || '',
+    outputSource: currentAttempt?.outputSource || 'standard',
+    items: Array.isArray(currentAttempt?.items) ? currentAttempt.items : [],
+    attempts: attempts.map((attempt) => ({
+      batchName: attempt.batchName,
+      batchId: attempt.batchId,
+      runId: attempt.runId,
+      attemptId: attempt.attemptId,
+      createdAt: attempt.batchRecord?.createdAt || attempt.manifest?.createdAt || null,
+      status: currentRecord?.batchName === attempt.batchName
+        ? currentRecord?.lastKnownState || 'UNKNOWN'
+        : (attempt.batchRecord?.lastKnownState || 'UNKNOWN'),
+      outputDir: attempt.outputDir,
+      outputSource: attempt.outputSource,
+      outputSummary: attempt.outputSummary || getBatchOutputSummary(rootDir, attempt.batchName),
+      items: attempt.items,
+    })),
+    manifestFound: attempts.some((attempt) => Boolean(attempt.manifestFound)),
+    pairingSource: currentAttempt?.pairingSource || {
+      manifestRequestItems: 0,
+      manifestInputCount: 0,
+      batchResultKeys: 0,
     },
   };
 }
@@ -1470,6 +2016,22 @@ function createServer() {
       const candidate = path.resolve(ROOT_DIR, requestRelPath);
       if (!(candidate === outputRoot || candidate.startsWith(`${outputRoot}${path.sep}`))) {
         sendJson(res, 403, { error: 'Invalid batch_output path.' });
+        return;
+      }
+      sendFile(res, candidate);
+      return;
+    }
+
+    if (req.method === 'GET' && url.pathname.startsWith('/staging/')) {
+      const stagingRoot = path.resolve(ROOT_DIR, 'staging');
+      const requestRelPath = decodeURIComponent(url.pathname).slice(1);
+      const candidate = path.resolve(ROOT_DIR, requestRelPath);
+      if (!(candidate === stagingRoot || candidate.startsWith(`${stagingRoot}${path.sep}`))) {
+        sendJson(res, 403, { error: 'Invalid staging path.' });
+        return;
+      }
+      if (!IMAGE_EXTENSIONS.has(path.extname(candidate).toLowerCase())) {
+        sendJson(res, 403, { error: 'Only staged image previews are supported.' });
         return;
       }
       sendFile(res, candidate);
@@ -1926,6 +2488,7 @@ function createServer() {
           lastCheckedAt: now,
           lastError: null,
         });
+        syncRunRecordStatus(updated.runId, status.stateRaw, updated);
         logStep('batch.status.success', `${status.batchName} -> ${status.state}`);
         sendJson(res, 200, {
           success: true,
@@ -1942,6 +2505,7 @@ function createServer() {
           lastCheckedAt: now,
           lastError: error.message || 'Batch status check failed.',
         });
+        syncRunRecordStatus(updated.runId, updated.lastKnownState, updated);
         logStep('batch.status.error', `${batchName} | ${error.message || 'unknown'}`);
         sendJson(res, 500, {
           success: false,
@@ -1974,6 +2538,7 @@ function createServer() {
             lastCheckedAt: now,
             lastError: null,
           });
+          syncRunRecordStatus(updated.runId, status.stateRaw, updated);
           refreshed.push(decorateBatchRecord(updated));
         } catch (error) {
           const updated = upsertBatchRecord(ROOT_DIR, {
@@ -1982,6 +2547,7 @@ function createServer() {
             lastCheckedAt: new Date().toISOString(),
             lastError: error.message || 'Batch refresh failed.',
           });
+          syncRunRecordStatus(updated.runId, updated.lastKnownState, updated);
           refreshed.push(decorateBatchRecord(updated));
           errors.push({
             batchName: record.batchName,
@@ -2049,6 +2615,7 @@ function createServer() {
           lastCheckedAt: now,
           lastError: null,
         });
+        syncRunRecordStatus(updated.runId, after.stateRaw, updated);
 
         logStep('batch.cancel.success', `${after.batchName} -> ${after.state}`);
         sendJson(res, 200, {
@@ -2098,6 +2665,8 @@ function createServer() {
           lastCheckedAt: now,
           lastError: null,
         });
+        syncRunRecordStatus(updated.runId, summary.stateRaw, updated);
+        buildBatchOutputList(ROOT_DIR, summary.batchName);
 
         logStep('batch.download.success', `${summary.batchName} saved=${summary.savedCount}`);
         sendJson(res, 200, {
@@ -2118,6 +2687,129 @@ function createServer() {
           success: false,
           error: error.message || 'Batch download failed.',
         });
+      }
+      return;
+    }
+
+    if (req.method === 'POST' && url.pathname === '/api/batch/output/approve') {
+      try {
+        const body = await parseRequestBody(req);
+        const outputId = String(body.outputId || '').trim();
+        if (!outputId) {
+          sendJson(res, 400, { error: 'outputId is required.' });
+          return;
+        }
+
+        const output = approveOutputRecord(ROOT_DIR, outputId);
+        const batch = output?.batchName ? getBatchRecord(ROOT_DIR, output.batchName) : null;
+        const run = output?.runId ? getRunRecord(ROOT_DIR, output.runId) : null;
+        sendJson(res, 200, {
+          success: true,
+          output,
+          batch: batch ? decorateBatchRecord(batch) : null,
+          run,
+        });
+      } catch (error) {
+        sendJson(res, 400, {
+          success: false,
+          error: error.message || 'Approve failed.',
+        });
+      }
+      return;
+    }
+
+    if (req.method === 'POST' && url.pathname === '/api/batch/output/reject') {
+      try {
+        const body = await parseRequestBody(req);
+        const outputId = String(body.outputId || '').trim();
+        if (!outputId) {
+          sendJson(res, 400, { error: 'outputId is required.' });
+          return;
+        }
+
+        const output = rejectOutputRecord(ROOT_DIR, outputId);
+        const batch = output?.batchName ? getBatchRecord(ROOT_DIR, output.batchName) : null;
+        const run = output?.runId ? getRunRecord(ROOT_DIR, output.runId) : null;
+        sendJson(res, 200, {
+          success: true,
+          output,
+          batch: batch ? decorateBatchRecord(batch) : null,
+          run,
+        });
+      } catch (error) {
+        sendJson(res, 400, {
+          success: false,
+          error: error.message || 'Reject failed.',
+        });
+      }
+      return;
+    }
+
+    if (req.method === 'POST' && url.pathname === '/api/batch/retry') {
+      if (batchRunInProgress) {
+        sendJson(res, 409, {
+          error: 'A batch run is already in progress.',
+        });
+        return;
+      }
+
+      batchRunInProgress = true;
+      try {
+        const body = await parseRequestBody(req);
+        const requestKey = String(body.requestKey || '').trim() || null;
+        const { runRecord, batchRecord } = resolveRetryContext({
+          runId: body.runId,
+          batchName: body.batchName,
+        });
+        if (!runRecord?.sourceJobFile) {
+          sendJson(res, 400, { error: 'Retry sourceJobFile is missing for this run.' });
+          return;
+        }
+
+        const registry = buildOptionRegistry(ROOT_DIR);
+        const canonicalJob = loadCanonicalJobFromSourceFile(runRecord.sourceJobFile);
+        const dryCheck = runDryBatchCheck(canonicalJob, { rootDir: ROOT_DIR, registry });
+        if (!dryCheck.ready) {
+          sendJson(res, 400, {
+            error: 'Retry dry batch readiness check failed.',
+            readiness: dryCheck,
+          });
+          return;
+        }
+
+        const inputSnapshot = buildRetryInputSnapshot(runRecord, requestKey);
+        const attempt = await launchBatchAttempt({
+          canonicalJob: dryCheck.canonicalJob,
+          sourceJobFile: runRecord.sourceJobFile,
+          inputSnapshot,
+          runId: runRecord.runId,
+        });
+
+        sendJson(res, attempt.runResult.success ? 200 : 500, {
+          success: attempt.runResult.success,
+          retried: {
+            runId: runRecord.runId,
+            requestKey,
+            previousBatchName: batchRecord?.batchName || null,
+            attemptId: attempt.runPlan.attemptId,
+            batchName: attempt.runResult.batchJobName || null,
+          },
+          batchRecord: attempt.batchRecord ? decorateBatchRecord(attempt.batchRecord) : null,
+          run: getRunRecord(ROOT_DIR, runRecord.runId),
+          readiness: dryCheck,
+          logs: attempt.runResult.logsSnippet || '',
+          durationMs: attempt.runResult.durationMs,
+          exitCode: attempt.runResult.exitCode,
+          timeout: attempt.runResult.timeout,
+          batches: listBatchRecords(ROOT_DIR).map((item) => decorateBatchRecord(item)),
+        });
+      } catch (error) {
+        sendJson(res, 500, {
+          success: false,
+          error: error.message || 'Retry failed.',
+        });
+      } finally {
+        batchRunInProgress = false;
       }
       return;
     }
@@ -2203,55 +2895,28 @@ function createServer() {
           fileName: body.fileName,
           overwrite: Boolean(body.overwrite),
         });
-        const runResult = await runBatchWithEdit(saved.filePath);
-        let batchRecord = null;
-        if (runResult.batchJobName) {
-          const now = new Date().toISOString();
-          batchRecord = upsertBatchRecord(ROOT_DIR, {
-            batchName: runResult.batchJobName,
-            sourceJobFile: saved.relativePath,
-            sourceJobId: dryCheck.canonicalJob?.jobId || dryCheck.canonicalJob?.displayName || null,
-            createdAt: now,
-            lastKnownState: runResult.batchState || 'UNKNOWN',
-            downloaded: false,
-            cancelled: false,
-            completedAt: isTerminalBatchState(runResult.batchState) ? now : null,
-            lastCheckedAt: now,
-            lastError: runResult.success ? null : (runResult.logsSnippet || 'Batch run failed'),
-          });
-
-          try {
-            writeBatchManifest({
-              batchName: runResult.batchJobName,
-              safeBatchName: safeBatchDirName(runResult.batchJobName),
-              sourceJobFile: saved.relativePath,
-              sourceJobId: dryCheck.canonicalJob?.jobId || dryCheck.canonicalJob?.displayName || null,
-              inputSource: inputSnapshot.inputSource,
-              inputFiles: inputSnapshot.inputFiles,
-              requestItems: inputSnapshot.requestItems,
-              requestKeyToInputFile: inputSnapshot.requestKeyToInputFile,
-            });
-          } catch (manifestError) {
-            logStep('job_builder.run_batch.manifest_error', manifestError.message || 'unknown');
-          }
-        }
+        const attempt = await launchBatchAttempt({
+          canonicalJob: dryCheck.canonicalJob,
+          sourceJobFile: saved.relativePath,
+          inputSnapshot,
+        });
         logStep(
           'job_builder.run_batch.result',
-          `success=${runResult.success} exitCode=${runResult.exitCode} job=${saved.relativePath}`
+          `success=${attempt.runResult.success} exitCode=${attempt.runResult.exitCode} job=${saved.relativePath}`
         );
 
-        sendJson(res, runResult.success ? 200 : 500, {
-          success: runResult.success,
-          jobName: runResult.batchJobName || null,
-          state: runResult.batchState || null,
-          logs: runResult.logsSnippet || '',
-          command: runResult.command,
-          durationMs: runResult.durationMs,
-          exitCode: runResult.exitCode,
-          timeout: runResult.timeout,
+        sendJson(res, attempt.runResult.success ? 200 : 500, {
+          success: attempt.runResult.success,
+          jobName: attempt.runResult.batchJobName || null,
+          state: attempt.runResult.batchState || null,
+          logs: attempt.runResult.logsSnippet || '',
+          command: attempt.runResult.command,
+          durationMs: attempt.runResult.durationMs,
+          exitCode: attempt.runResult.exitCode,
+          timeout: attempt.runResult.timeout,
           jobFilePath: saved.filePath,
           jobFileRelativePath: saved.relativePath,
-          batchRecord: batchRecord ? decorateBatchRecord(batchRecord) : null,
+          batchRecord: attempt.batchRecord ? decorateBatchRecord(attempt.batchRecord) : null,
           readiness: dryCheck,
           jobs: getJobsIndex(),
           batches: listBatchRecords(ROOT_DIR).map((item) => decorateBatchRecord(item)),
@@ -2287,6 +2952,7 @@ function createServer() {
           canonicalJob: compiled.canonicalJob,
           imageConfig: compiled.imageConfig,
           validation: compiled.validation,
+          authority: compiled.authority,
         });
         logStep('job_builder.compile.success', `promptLength=${compiled.prompt.length}`);
       } catch (error) {

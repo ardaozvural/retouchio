@@ -204,10 +204,6 @@ function normalizeSubjectRefinementLevel(value) {
   return 'preserve';
 }
 
-function hasReferenceAsset(entity) {
-  return Boolean(entity?.asset_id) || ensureArray(entity?.asset_ids).some(Boolean);
-}
-
 function normalizeIntentSource(source, fallbackIsReference) {
   if (INTENT_SOURCES.includes(source)) {
     return source;
@@ -255,11 +251,11 @@ function normalizeIntentFields(entities, rawEntities = {}) {
     ? (hasOwnField(rawEntities.footwear, 'source')
       ? normalizeIntentSource(
         entities.footwear.source,
-        hasReferenceAsset(entities.footwear)
+        false
       )
       : normalizeIntentSource(
         undefined,
-        hasReferenceAsset(entities.footwear)
+        false
       ))
     : 'system';
   entities.footwear.placement = normalizePlacement('footwear', entities.footwear.placement, 'on_feet');
@@ -268,11 +264,11 @@ function normalizeIntentFields(entities, rawEntities = {}) {
     ? (hasOwnField(rawEntities.headwear, 'source')
       ? normalizeIntentSource(
         entities.headwear.source,
-        hasReferenceAsset(entities.headwear)
+        false
       )
       : normalizeIntentSource(
         undefined,
-        hasReferenceAsset(entities.headwear)
+        false
       ))
     : 'system';
   entities.headwear.placement = normalizePlacement('headwear', entities.headwear.placement, 'auto');
@@ -288,7 +284,7 @@ function normalizeIntentFields(entities, rawEntities = {}) {
       source: accessoryModeUsesReference(item?.mode)
         ? normalizeIntentSource(
           item?.source,
-          Boolean(assetId)
+          false
         )
         : 'system',
       placement: normalizePlacement(family, item?.placement, 'auto'),

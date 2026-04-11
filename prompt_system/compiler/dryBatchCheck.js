@@ -48,11 +48,13 @@ function runDryBatchCheck(job, options = {}) {
   let prompt = '';
   let canonicalJob = null;
   let imageConfig = null;
+  let authority = null;
   try {
     const built = buildPrompt(job, { rootDir });
     prompt = built.prompt;
     canonicalJob = built.canonicalJob;
     imageConfig = built.imageConfig || null;
+    authority = built.authority || null;
     if (!prompt || prompt.length < 50) {
       errors.push('Compiled prompt is invalid or empty.');
     }
@@ -98,6 +100,7 @@ function runDryBatchCheck(job, options = {}) {
     },
     outputProfile: canonicalJob?.entities?.output_profile?.profile || null,
     imageConfig,
+    authority,
     compiledPromptLength: prompt.length,
     resolvedRefSummary,
     canonicalJob,

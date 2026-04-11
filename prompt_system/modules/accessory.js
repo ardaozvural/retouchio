@@ -80,6 +80,7 @@ module.exports = {
 
       const slotKey = getAccessorySlotKey(item);
       const slotConfig = slotKey ? context.slotRules?.slots?.[slotKey] : null;
+      const referenceAuthorityActive = Boolean(item.reference_authority_active);
       const lines = [];
       const familyLabel = item.family || 'accessory';
       const variantLabel = formatAccessoryPromptLabel(item);
@@ -98,11 +99,11 @@ module.exports = {
       }
 
       if (item.mode !== 'remove' && item.mode !== 'preserve') {
-        if (slotConfig?.referenceBindingText && item.asset_id) {
+        if (referenceAuthorityActive && slotConfig?.referenceBindingText) {
           lines.push(slotConfig.referenceBindingText);
         }
 
-        if (Array.isArray(slotConfig?.rules) && slotConfig.rules.length > 0) {
+        if (referenceAuthorityActive && Array.isArray(slotConfig?.rules) && slotConfig.rules.length > 0) {
           lines.push(...slotConfig.rules);
         } else if (item.variant && GENERIC_ACCESSORY_LINES[item.variant]) {
           lines.push(...GENERIC_ACCESSORY_LINES[item.variant]);

@@ -132,6 +132,9 @@ function cacheElements() {
     compileInspectContent: document.getElementById('compileInspectContent'),
     variationStrip: document.getElementById('variationStrip'),
     variationCount: document.getElementById('variationCount'),
+    resultLifecycleState: document.getElementById('resultLifecycleState'),
+    resultLifecycleLabel: document.getElementById('resultLifecycleLabel'),
+    resultLifecycleHelper: document.getElementById('resultLifecycleHelper'),
     heroPreviewLabel: document.getElementById('heroPreviewLabel'),
     heroPreviewCompare: document.getElementById('heroPreviewCompare'),
     heroBeforeImage: document.getElementById('heroBeforeImage'),
@@ -148,10 +151,13 @@ function cacheElements() {
     loadSampleButton: document.getElementById('loadSampleButton'),
     saveJobButton: document.getElementById('saveJobButton'),
     savedJobSelect: document.getElementById('savedJobSelect'),
+    sampleJobSelect: document.getElementById('sampleJobSelect'),
     loadSavedJobButton: document.getElementById('loadSavedJobButton'),
     runDryCheckButton: document.getElementById('runDryCheckButton'),
     runBatchButton: document.getElementById('runBatchButton'),
     cancelActiveBatchButton: document.getElementById('cancelActiveBatchButton'),
+    openCanonicalInspectButton: document.getElementById('openCanonicalInspectButton'),
+    openPromptInspectButton: document.getElementById('openPromptInspectButton'),
     copyJsonButton: document.getElementById('copyJsonButton'),
     downloadJsonButton: document.getElementById('downloadJsonButton'),
     copyPromptButton: document.getElementById('copyPromptButton'),
@@ -313,6 +319,43 @@ function cacheElements() {
   });
 }
 
+function getCanonicalAuthoringControls() {
+  // These DOM controls are the supported authoring inputs for canonical state.
+  // Some are rendered directly, others are backing fields for visible shell controls.
+  return [
+    elements.jobId,
+    elements.displayName,
+    elements.inputSource,
+    elements.subjectMode,
+    elements.subjectReferenceId,
+    elements.garmentMaterialRefs,
+    elements.garmentPatternRefs,
+    elements.eyewearAction,
+    elements.eyewearSource,
+    elements.eyewearPlacement,
+    elements.eyewearAssetId,
+    elements.bagAction,
+    elements.bagSource,
+    elements.bagPlacement,
+    elements.bagAssetId,
+    elements.footwearMode,
+    elements.footwearSource,
+    elements.footwearVariant,
+    elements.footwearAssetId,
+    elements.headwearMode,
+    elements.headwearSource,
+    elements.headwearPlacement,
+    elements.headwearVariant,
+    elements.headwearAssetId,
+    elements.sceneMode,
+    elements.sceneProfile,
+    elements.outputProfileMode,
+    elements.outputProfileProfile,
+    elements.globalNegativeMode,
+    elements.globalNegativeItems,
+  ].filter(Boolean);
+}
+
 function bindStaticEvents() {
   elements.workflowType?.addEventListener('change', () => {
     state.workflowType = elements.workflowType.value || 'studio_cleanup';
@@ -356,15 +399,7 @@ function bindStaticEvents() {
   });
 
   elements.loadSampleButton.addEventListener('click', () => {
-    state.job = normalizePhaseOneSubjectJob(state.sampleJob || state.defaultJob || createFallbackJob());
-    syncWorkflowTypeWithJob();
-    clearDerivedStates();
-    state.ui.initialized = false;
-    hydrateForm();
-    renderAccessoryItems();
-    renderStylingUiState();
-    renderAllSidePanels();
-      showStatus('Örnek kanonik iş yüklendi.');
+    void loadSelectedSampleJob();
   });
 
   elements.saveJobButton.addEventListener('click', () => {
@@ -547,6 +582,14 @@ function bindStaticEvents() {
     await copyText(state.compiledPrompt, 'Derlenmiş istem kopyalandı.');
   });
 
+  elements.openCanonicalInspectButton?.addEventListener('click', () => {
+    openCompileInspectTab('canonical-job');
+  });
+
+  elements.openPromptInspectButton?.addEventListener('click', () => {
+    openCompileInspectTab('compiled-prompt');
+  });
+
   elements.addAccessoryButton.addEventListener('click', () => {
     syncStateFromForm();
     state.job.entities.accessory.items.push(createAccessoryItem());
@@ -558,42 +601,9 @@ function bindStaticEvents() {
   elements.accessoryItems.addEventListener('change', handleAccessoryInput);
   elements.accessoryItems.addEventListener('click', handleAccessoryButtonClick);
 
-  [
-    elements.jobId,
-    elements.displayName,
-    elements.inputSource,
-    elements.subjectMode,
-    elements.subjectReferenceId,
-    elements.garmentMode,
-    elements.garmentMaterialRefs,
-    elements.garmentPatternRefs,
-    elements.eyewearAction,
-    elements.eyewearSource,
-    elements.eyewearPlacement,
-    elements.eyewearAssetId,
-    elements.bagAction,
-    elements.bagSource,
-    elements.bagPlacement,
-    elements.bagAssetId,
-    elements.footwearMode,
-    elements.footwearSource,
-    elements.footwearVariant,
-    elements.footwearAssetId,
-    elements.headwearMode,
-    elements.headwearSource,
-    elements.headwearPlacement,
-    elements.headwearVariant,
-    elements.headwearAssetId,
-    elements.accessoryMode,
-    elements.sceneMode,
-    elements.sceneProfile,
-    elements.outputProfileMode,
-    elements.outputProfileProfile,
-    elements.globalNegativeMode,
-    elements.globalNegativeItems,
-  ].forEach((element) => {
-    element.addEventListener('input', handleHiddenStoreFieldMutation);
-    element.addEventListener('change', handleHiddenStoreFieldMutation);
+  getCanonicalAuthoringControls().forEach((element) => {
+    element.addEventListener('input', handleCanonicalAuthoringFieldMutation);
+    element.addEventListener('change', handleCanonicalAuthoringFieldMutation);
   });
 }
 
@@ -670,9 +680,23 @@ function bindVisibleShellEvents() {
   });
   elements.variationStrip?.addEventListener('click', handleVariationStripClick);
 
-  elements.compareOutputButton?.addEventListener('click', () => {
-    state.ui.results.previewMode = state.ui.results.previewMode === 'compare' ? 'output' : 'compare';
-    renderHeroPreview();
+  elements.compareOutputButton?.addEventListener('click', async () => {
+    const lifecycle = getResultLifecycleSnapshot();
+    if (lifecycle.state !== 'succeeded') {
+      return;
+    }
+
+    if (!hasComparableResultCandidates()) {
+      await loadResultOutputItems();
+    }
+
+    if (!hasComparableResultCandidates()) {
+      showStatus('Karşılaştırma için gerçek çıktı çifti henüz hazır değil.', true);
+      return;
+    }
+
+    state.ui.results.viewMode = state.ui.results.viewMode === 'compare' ? 'output' : 'compare';
+    renderConnectedResultSystem();
   });
 
   elements.compileInspectToggle?.addEventListener('click', () => {
@@ -709,47 +733,36 @@ function bindVisibleShellEvents() {
     }
   });
 
-  elements.approveOutputButton?.addEventListener('click', () => {
-    const active = getActiveVariation();
-    if (!active) {
-      showStatus('Önce bir varyasyon seçin.', true);
-      return;
-    }
-    state.ui.results.approvedVariationKey = active.key;
-    renderConnectedResultSystem();
-    showStatus(`${active.title} arayüzde onaylandı.`);
+  elements.approveOutputButton?.addEventListener('click', async () => {
+    await handlePrimaryResultAction();
   });
 
-  elements.regenerateOutputButton?.addEventListener('click', () => {
-    const candidates = buildVariationCandidates();
-    if (candidates.length === 0) {
-      showStatus('Henüz kullanılabilir varyasyon yok.', true);
-      return;
-    }
-    const currentIndex = candidates.findIndex((item) => item.key === state.ui.results.activeVariationKey);
-    const nextIndex = currentIndex >= 0 ? (currentIndex + 1) % candidates.length : 0;
-    state.ui.results.activeVariationKey = candidates[nextIndex].key;
-    renderConnectedResultSystem();
-    showStatus(`${candidates[nextIndex].title} gösteriliyor.`);
+  elements.regenerateOutputButton?.addEventListener('click', async () => {
+    await handleSecondaryResultAction();
   });
 
-  elements.downloadOutputButton?.addEventListener('click', () => {
-    const active = getActiveVariation();
-    if (!active?.outputUrl) {
-      showStatus('İndirilecek çıktı önizlemesi yok.', true);
+  elements.downloadOutputButton?.addEventListener('click', async () => {
+    const lifecycle = getResultLifecycleSnapshot();
+    if (lifecycle.state !== 'succeeded' || !lifecycle.batchName) {
+      showStatus('İndirilecek hazır çıktı yok.', true);
       return;
     }
-    const link = document.createElement('a');
-    link.href = active.outputUrl;
-    link.download = `${active.key}.jpg`;
-    link.click();
+    await downloadBatch(lifecycle.batchName);
+    await loadResultOutputItems({ force: true, silent: true });
   });
 
   elements.reviewSummaryButton?.addEventListener('click', () => {
-    state.ui.inspect.open = true;
-    renderCompileInspectPanel();
-    elements.compileInspectPanel?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    openCompileInspectTab(state.ui.inspect?.activeTab || 'compile-summary');
   });
+}
+
+function openCompileInspectTab(tabId = 'compile-summary') {
+  state.ui.inspect.open = true;
+  state.ui.inspect.activeTab = COMPILE_INSPECT_TABS.some((tab) => tab.id === tabId)
+    ? tabId
+    : 'compile-summary';
+  renderCompileInspectPanel();
+  elements.compileInspectPanel?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 function handleModelShellClick(event) {
@@ -903,12 +916,12 @@ function handleReferenceSlotChange(event) {
   return true;
 }
 
-function handleHiddenStoreFieldMutation(event) {
-  sanitizeHiddenReferenceStateBeforeSync(event.target);
+function handleCanonicalAuthoringFieldMutation(event) {
+  sanitizeAuthoringReferenceStateBeforeSync(event.target);
   syncStateFromForm();
 }
 
-function sanitizeHiddenReferenceStateBeforeSync(target) {
+function sanitizeAuthoringReferenceStateBeforeSync(target) {
   if (!target) {
     return;
   }
@@ -1762,6 +1775,7 @@ async function refreshBatchJobs() {
     }
     state.batchJobs = Array.isArray(payload.batches) ? payload.batches : [];
     renderBatchJobs();
+    renderConnectedResultSystem();
   } catch (error) {
     showStatus(error.message || 'Toplu işler yüklenemedi.', true);
   } finally {
@@ -1783,6 +1797,7 @@ async function refreshAllBatchStatuses() {
     }
     state.batchJobs = Array.isArray(payload.batches) ? payload.batches : [];
     renderBatchJobs();
+    renderConnectedResultSystem();
     showStatus(payload.success ? 'Toplu iş durumları yenilendi.' : 'Toplu iş durumları uyarılarla yenilendi.', !payload.success);
   } catch (error) {
     showStatus(error.message || 'Toplu iş yenileme başarısız oldu.', true);
@@ -1804,6 +1819,7 @@ async function refreshSingleBatchStatus(batchName) {
     }
     upsertBatchState(payload.batch);
     renderBatchJobs();
+    renderConnectedResultSystem();
     showStatus(`Toplu iş durumu yenilendi: ${batchName}`);
   } catch (error) {
     showStatus(error.message || 'Toplu iş durumu yenilenemedi.', true);
@@ -1834,6 +1850,7 @@ async function cancelBatch(batchName) {
     }
     upsertBatchState(payload.batch);
     renderBatchJobs();
+    renderConnectedResultSystem();
     showStatus(`Toplu iş iptal isteği gönderildi: ${batchName}`);
   } catch (error) {
     showStatus(error.message || 'Toplu iş iptal edilemedi.', true);
@@ -1859,6 +1876,7 @@ async function downloadBatch(batchName) {
     }
     upsertBatchState(payload.batch);
     renderBatchJobs();
+    renderConnectedResultSystem();
     const saved = payload.download?.savedCount ?? 0;
     showStatus(`Toplu iş indirildi: ${batchName} (${saved} görsel)`);
   } catch (error) {
@@ -1866,6 +1884,15 @@ async function downloadBatch(batchName) {
   } finally {
     setActionBusy('batchAction', false);
   }
+}
+
+async function fetchBatchOutputsPayload(batchName) {
+  const response = await fetch(`/api/batch/outputs?batchName=${encodeURIComponent(batchName)}`);
+  const payload = await response.json();
+  if (!response.ok) {
+    throw new Error(payload.error || 'Toplu iş çıktıları yüklenemedi.');
+  }
+  return payload;
 }
 
 async function viewBatchOutputs(batchName) {
@@ -1887,11 +1914,7 @@ async function viewBatchOutputs(batchName) {
   renderOutputsModal();
 
   try {
-    const response = await fetch(`/api/batch/outputs?batchName=${encodeURIComponent(batchName)}`);
-    const payload = await response.json();
-    if (!response.ok) {
-      throw new Error(payload.error || 'Toplu iş çıktıları yüklenemedi.');
-    }
+    const payload = await fetchBatchOutputsPayload(batchName);
 
     state.outputsReview.batchName = payload.batchName || batchName;
     state.outputsReview.safeBatchName = payload.safeBatchName || '';
@@ -1904,6 +1927,352 @@ async function viewBatchOutputs(batchName) {
     state.outputsReview.loading = false;
     state.outputsReview.error = error.message || 'Toplu iş çıktıları yüklenemedi.';
     renderOutputsModal();
+  }
+}
+
+function getLatestBatchByCreatedAt(items = []) {
+  return items
+    .slice()
+    .sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')))[0] || null;
+}
+
+function mapBatchStateToLifecycle(value) {
+  const status = normalizeUiBatchState(value);
+  if (status === 'RUNNING') {
+    return 'running';
+  }
+  if (status === 'SUCCEEDED') {
+    return 'succeeded';
+  }
+  if (status === 'FAILED' || status === 'CANCELLED') {
+    return 'failed';
+  }
+  return 'pending';
+}
+
+function getResultLifecycleSnapshot() {
+  const batchItems = Array.isArray(state.batchJobs) ? state.batchJobs : [];
+  const preferredBatchName = String(state.runStatus.batchJobName || '').trim();
+  const preferredBatch = preferredBatchName
+    ? batchItems.find((item) => String(item?.batchName || '').trim() === preferredBatchName) || null
+    : null;
+
+  if (state.runStatus.status === 'running' && (!preferredBatchName || !preferredBatch)) {
+    return {
+      state: 'running',
+      batchName: preferredBatchName,
+      batch: preferredBatch,
+      rawState: normalizeUiBatchState(state.runStatus.batchState || 'RUNNING'),
+    };
+  }
+
+  if (state.runStatus.status === 'error' && !preferredBatchName) {
+    return {
+      state: 'failed',
+      batchName: '',
+      batch: null,
+      rawState: normalizeUiBatchState(state.runStatus.batchState || 'FAILED'),
+    };
+  }
+
+  const batch = preferredBatch || getLatestBatchByCreatedAt(batchItems);
+  const batchName = String(batch?.batchName || preferredBatchName || '').trim();
+  const rawState = batch?.status || batch?.lastKnownState || state.runStatus.batchState || state.runStatus.status || 'PENDING';
+  const lifecycleState = mapBatchStateToLifecycle(rawState);
+
+  if (batch) {
+    return {
+      state: lifecycleState,
+      batchName,
+      batch,
+      rawState: normalizeUiBatchState(rawState),
+    };
+  }
+
+  if (state.runStatus.status === 'running') {
+    return {
+      state: 'running',
+      batchName,
+      batch: null,
+      rawState: normalizeUiBatchState(state.runStatus.batchState || 'RUNNING'),
+    };
+  }
+
+  if (state.runStatus.status === 'error') {
+    return {
+      state: 'failed',
+      batchName,
+      batch: null,
+      rawState: normalizeUiBatchState(state.runStatus.batchState || 'FAILED'),
+    };
+  }
+
+  return {
+    state: 'pending',
+    batchName,
+    batch: null,
+    rawState: normalizeUiBatchState(state.runStatus.batchState || 'PENDING'),
+  };
+}
+
+function getResultLifecycleUi(snapshot = getResultLifecycleSnapshot()) {
+  if (snapshot.state === 'running') {
+    return {
+      tone: 'running',
+      label: 'İşlem sürüyor',
+      helper: 'Aynı karttan durumu yenileyerek ilerlemeyi kontrol edin.',
+    };
+  }
+
+  if (snapshot.state === 'succeeded') {
+    if (state.ui.results.outputError) {
+      return {
+        tone: 'succeeded',
+        label: 'Çıktı hazır',
+        helper: state.ui.results.outputError,
+      };
+    }
+
+    if (state.ui.results.outputsLoading) {
+      return {
+        tone: 'running',
+        label: 'Çıktı yükleniyor',
+        helper: 'Yerel önizleme dosyaları kontrol ediliyor.',
+      };
+    }
+
+    if (!hasResultOutputCandidates() && !snapshot.batch?.downloaded) {
+      return {
+        tone: 'succeeded',
+        label: 'Çıktı hazır',
+        helper: 'Önizleme ve karşılaştırma için önce yerel çıktı dosyalarını alın.',
+      };
+    }
+
+    return {
+      tone: 'succeeded',
+      label: 'Çıktı hazır',
+      helper: 'Onay, yeniden deneme, indirme ve karşılaştırma aynı kart içinde kalır.',
+    };
+  }
+
+  if (snapshot.state === 'failed') {
+    return {
+      tone: 'failed',
+      label: 'İşlem tamamlanamadı',
+      helper: snapshot.batch?.lastError || 'Durumu yeniden kontrol ederek güncel hata bilgisini alın.',
+    };
+  }
+
+  return {
+    tone: 'pending',
+    label: 'Henüz işlenmedi',
+    helper: 'Toplu çalışma başladığında durum aynı kart içinde güncellenecek.',
+  };
+}
+
+function resetResultOutputCache(nextBatchName = '') {
+  state.ui.results.outputBatchName = nextBatchName;
+  state.ui.results.outputItems = [];
+  state.ui.results.outputError = '';
+  state.ui.results.outputsLoading = false;
+  state.ui.results.activeVariationKey = '';
+  state.ui.results.approvedVariationKey = '';
+}
+
+function getResultOutputItems() {
+  const snapshot = getResultLifecycleSnapshot();
+  if (!snapshot.batchName || state.ui.results.outputBatchName !== snapshot.batchName) {
+    return [];
+  }
+  return Array.isArray(state.ui.results.outputItems) ? state.ui.results.outputItems : [];
+}
+
+function getOutputItemKey(item, fallbackIndex = 0) {
+  return String(item?.key || item?.output?.file || `output_${fallbackIndex + 1}`).trim() || `output_${fallbackIndex + 1}`;
+}
+
+function getActiveResultOutputItem() {
+  const items = getResultOutputItems().filter((item) => Boolean(item?.output?.url));
+  if (items.length === 0) {
+    return null;
+  }
+
+  const activeKey = String(state.ui.results.activeVariationKey || '').trim();
+  if (activeKey) {
+    const activeItem = items.find((item, index) => getOutputItemKey(item, index) === activeKey);
+    if (activeItem) {
+      return activeItem;
+    }
+  }
+
+  return items[0];
+}
+
+function hasResultOutputCandidates() {
+  return getResultOutputItems().some((item) => Boolean(item?.output?.url));
+}
+
+function hasComparableResultCandidates() {
+  return getResultOutputItems().some((item) => Boolean(item?.output?.url && item?.input?.url));
+}
+
+function normalizeResultViewMode() {
+  const requested = state.ui.results.viewMode === 'compare'
+    ? 'compare'
+    : state.ui.results.viewMode === 'output'
+      ? 'output'
+      : 'input';
+
+  if (!hasResultOutputCandidates()) {
+    return 'input';
+  }
+
+  if (requested === 'compare') {
+    return hasComparableResultCandidates() ? 'compare' : 'output';
+  }
+
+  return requested;
+}
+
+function syncResultStageState() {
+  const snapshot = getResultLifecycleSnapshot();
+  const currentBatchName = snapshot.batchName || '';
+
+  if (state.ui.results.outputBatchName && state.ui.results.outputBatchName !== currentBatchName) {
+    resetResultOutputCache('');
+  }
+
+  if (!hasResultOutputCandidates()) {
+    state.ui.results.activeVariationKey = '';
+    state.ui.results.approvedVariationKey = '';
+  }
+
+  const normalizedViewMode = normalizeResultViewMode();
+  if (state.ui.results.viewMode !== normalizedViewMode) {
+    state.ui.results.viewMode = normalizedViewMode;
+  }
+}
+
+async function loadResultOutputItems(options = {}) {
+  const snapshot = getResultLifecycleSnapshot();
+  const batchName = String(options.batchName || snapshot.batchName || '').trim();
+  if (!batchName) {
+    return [];
+  }
+
+  if (!options.force && state.ui.results.outputBatchName === batchName && Array.isArray(state.ui.results.outputItems) && state.ui.results.outputItems.length > 0) {
+    return state.ui.results.outputItems;
+  }
+
+  state.ui.results.outputsLoading = true;
+  state.ui.results.outputError = '';
+  renderConnectedResultSystem();
+
+  try {
+    const payload = await fetchBatchOutputsPayload(batchName);
+    state.ui.results.outputBatchName = payload.batchName || batchName;
+    state.ui.results.outputItems = Array.isArray(payload.items) ? payload.items : [];
+    const finalItem = state.ui.results.outputItems.find((item, index) => Boolean(item?.is_final) && Boolean(item?.output?.url));
+    state.ui.results.approvedVariationKey = finalItem ? getOutputItemKey(finalItem, state.ui.results.outputItems.indexOf(finalItem)) : '';
+    state.ui.results.outputError = state.ui.results.outputItems.some((item) => item?.output?.url)
+      ? ''
+      : 'Bu iş için yerel çıktı dosyası bulunamadı.';
+    return state.ui.results.outputItems;
+  } catch (error) {
+    state.ui.results.outputBatchName = batchName;
+    state.ui.results.outputItems = [];
+    state.ui.results.outputError = error.message || 'Toplu iş çıktıları yüklenemedi.';
+    if (!options.silent) {
+      showStatus(state.ui.results.outputError, true);
+    }
+    return [];
+  } finally {
+    state.ui.results.outputsLoading = false;
+    renderConnectedResultSystem();
+  }
+}
+
+async function refreshResultLifecycleState() {
+  const snapshot = getResultLifecycleSnapshot();
+  if (snapshot.batchName) {
+    await refreshSingleBatchStatus(snapshot.batchName);
+    return;
+  }
+  await refreshAllBatchStatuses();
+}
+
+async function handlePrimaryResultAction() {
+  const snapshot = getResultLifecycleSnapshot();
+  if (snapshot.state === 'succeeded') {
+    await loadResultOutputItems();
+    const activeItem = getActiveResultOutputItem();
+    if (!activeItem?.outputId) {
+      showStatus('Onaylanacak hazır çıktı bulunamadı. Gerekirse önce indirerek dosyaları alın.', true);
+      return;
+    }
+    const activeKey = getOutputItemKey(activeItem, getResultOutputItems().indexOf(activeItem));
+    setActionBusy('outputs', true);
+    try {
+      const response = await fetch('/api/batch/output/approve', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ outputId: activeItem.outputId }),
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload.error || 'Çıktı onaylanamadı.');
+      }
+      await refreshBatchJobs({ silent: true });
+      await loadResultOutputItems({ force: true, silent: true });
+      state.ui.results.approvedVariationKey = activeKey;
+      renderConnectedResultSystem();
+      showStatus('Seçili çıktı onaylandı.');
+    } catch (error) {
+      showStatus(error.message || 'Çıktı onaylanamadı.', true);
+    } finally {
+      setActionBusy('outputs', false);
+    }
+    return;
+  }
+
+  await refreshResultLifecycleState();
+}
+
+async function handleSecondaryResultAction() {
+  const snapshot = getResultLifecycleSnapshot();
+  if (!snapshot.batch?.runId) {
+    return;
+  }
+
+  const activeItem = snapshot.state === 'succeeded'
+    ? (await loadResultOutputItems(), getActiveResultOutputItem())
+    : null;
+  const retryRequestKey = snapshot.state === 'succeeded' ? String(activeItem?.key || '').trim() || null : null;
+
+  setActionBusy('outputs', true);
+  try {
+    const response = await fetch('/api/batch/retry', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        runId: snapshot.batch.runId,
+        batchName: snapshot.batchName || null,
+        requestKey: retryRequestKey,
+      }),
+    });
+    const payload = await response.json();
+    if (!response.ok) {
+      throw new Error(payload.error || 'Yeni deneme başlatılamadı.');
+    }
+    await refreshBatchJobs({ silent: true });
+    showStatus(retryRequestKey
+      ? `"${retryRequestKey}" için yeni deneme başlatıldı.`
+      : 'Yeni deneme başlatıldı.');
+  } catch (error) {
+    showStatus(error.message || 'Yeni deneme başlatılamadı.', true);
+  } finally {
+    setActionBusy('outputs', false);
   }
 }
 
@@ -1947,6 +2316,7 @@ function renderOutputsModal() {
   }
 
   const mode = state.outputsReview.mode === 'compare' ? 'compare' : 'output';
+  const compareItems = state.outputsReview.items.filter((item) => Boolean(item?.output?.url));
 
   if (mode === 'output') {
     const outputItems = state.outputsReview.items
@@ -1983,6 +2353,11 @@ function renderOutputsModal() {
     return;
   }
 
+  if (compareItems.length === 0) {
+    elements.outputsModalBody.innerHTML = '<div class="output-empty">Karşılaştırma için hazır output bulunamadı.</div>';
+    return;
+  }
+
   const renderThumb = (node, emptyText) => {
     if (!node || !node.url) {
       return `<div class="output-thumb-empty">${escapeHtml(emptyText)}</div>`;
@@ -1993,7 +2368,10 @@ function renderOutputsModal() {
 
   elements.outputsModalBody.innerHTML = `
     <div class="output-grid">
-      ${state.outputsReview.items.map((item, index) => `
+      ${state.outputsReview.items
+        .map((item, index) => ({ item, index }))
+        .filter(({ item }) => Boolean(item?.output?.url))
+        .map(({ item, index }) => `
         <article class="output-thumb-card">
           <button
             class="output-thumb-wrap output-thumb-pair"
@@ -2047,6 +2425,11 @@ function setOutputsReviewMode(mode) {
     return;
   }
   const nextMode = mode === 'compare' ? 'compare' : 'output';
+  if (nextMode === 'compare' && !state.outputsReview.items.some((item) => Boolean(item?.output?.url))) {
+    state.outputsReview.mode = 'output';
+    renderOutputsModal();
+    return;
+  }
   if (state.outputsReview.mode === nextMode) {
     return;
   }
@@ -2060,22 +2443,23 @@ function renderOutputsModeToggle() {
   }
   const activeMode = state.outputsReview.mode === 'compare' ? 'compare' : 'output';
   const loading = Boolean(state.outputsReview.loading);
+  const canCompare = state.outputsReview.items.some((item) => Boolean(item?.output?.url));
   const outputActive = activeMode === 'output';
-  const compareActive = activeMode === 'compare';
+  const compareActive = canCompare && activeMode === 'compare';
 
   elements.outputsModeOutputOnlyButton.classList.toggle('is-active', outputActive);
   elements.outputsModeCompareButton.classList.toggle('is-active', compareActive);
   elements.outputsModeOutputOnlyButton.setAttribute('aria-pressed', outputActive ? 'true' : 'false');
   elements.outputsModeCompareButton.setAttribute('aria-pressed', compareActive ? 'true' : 'false');
   elements.outputsModeOutputOnlyButton.disabled = loading;
-  elements.outputsModeCompareButton.disabled = loading;
+  elements.outputsModeCompareButton.disabled = loading || !canCompare;
+  elements.outputsModeCompareButton.hidden = !canCompare;
 }
 
 function openOutputImageModal(item, previewMode = 'compare') {
   if (!elements.outputsImageModal) {
     return;
   }
-  const mode = previewMode === 'output' ? 'output' : 'compare';
   const key = String(item?.key || '').trim() || '-';
   const input = item?.input && typeof item.input === 'object'
     ? { file: item.input.file || null, url: item.input.url || null }
@@ -2083,6 +2467,7 @@ function openOutputImageModal(item, previewMode = 'compare') {
   const output = item?.output && typeof item.output === 'object'
     ? { file: item.output.file || null, url: item.output.url || null }
     : null;
+  const mode = previewMode === 'compare' && output?.url ? 'compare' : 'output';
 
   state.outputImagePreview = {
     open: true,
@@ -2641,6 +3026,44 @@ async function saveCurrentJob() {
     showStatus(error.message || 'Kaydetme başarısız oldu', true);
   } finally {
     setActionBusy('save', false);
+  }
+}
+
+async function loadSelectedSampleJob() {
+  const selected = String(elements.sampleJobSelect?.value || '').trim();
+  if (!selected) {
+    state.job = normalizePhaseOneSubjectJob(state.sampleJob || state.defaultJob || createFallbackJob());
+    syncWorkflowTypeWithJob();
+    clearDerivedStates();
+    state.ui.initialized = false;
+    hydrateForm();
+    renderAccessoryItems();
+    renderStylingUiState();
+    renderAllSidePanels();
+    showStatus('Örnek kanonik iş yüklendi.');
+    return;
+  }
+
+  try {
+    const response = await fetch(`/api/job-builder/jobs/${encodeURIComponent(selected)}?source=sample`);
+    const payload = await response.json();
+    if (!response.ok) {
+      throw new Error(payload.error || 'Örnek iş yüklenemedi');
+    }
+
+    const nextSampleJob = normalizePhaseOneSubjectJob(payload.job || state.sampleJob || createFallbackJob());
+    state.sampleJob = nextSampleJob;
+    state.job = normalizePhaseOneSubjectJob(nextSampleJob);
+    syncWorkflowTypeWithJob();
+    clearDerivedStates();
+    state.ui.initialized = false;
+    hydrateForm();
+    renderAccessoryItems();
+    renderStylingUiState();
+    renderAllSidePanels();
+    showStatus(`Örnek iş yüklendi: ${selected}`);
+  } catch (error) {
+    showStatus(error.message || 'Örnek iş yüklenemedi', true);
   }
 }
 
@@ -3500,35 +3923,56 @@ function batchMatchesFilter(batch, filterValue) {
 }
 
 function renderJobsPanel(selectedName = null) {
-  if (!elements.generatedJobsList || !elements.sampleJobsList || !elements.savedJobSelect) {
+  if (!elements.savedJobSelect) {
     return;
   }
   const generated = state.jobs?.generated || [];
   const sample = state.jobs?.sample || [];
 
-  elements.generatedJobsList.innerHTML = generated.length
-    ? generated.map((item) => `<li>${escapeHtml(item.name)}</li>`).join('')
-    : '<li>Yok</li>';
-  elements.sampleJobsList.innerHTML = sample.length
-    ? sample.map((item) => `<li>${escapeHtml(item.name)}</li>`).join('')
-    : '<li>Yok</li>';
+  if (elements.generatedJobsList) {
+    elements.generatedJobsList.innerHTML = generated.length
+      ? generated.map((item) => `<li>${escapeHtml(item.name)}</li>`).join('')
+      : '<li>Yok</li>';
+  }
+  if (elements.sampleJobsList) {
+    elements.sampleJobsList.innerHTML = sample.length
+      ? sample.map((item) => `<li>${escapeHtml(item.name)}</li>`).join('')
+      : '<li>Yok</li>';
+  }
 
   if (generated.length === 0) {
     elements.savedJobSelect.innerHTML = '<option value="">Kayıtlı iş yok</option>';
     elements.savedJobSelect.disabled = true;
-    return;
+  } else {
+    elements.savedJobSelect.disabled = false;
+    const selected = selectedName && generated.some((item) => item.name === selectedName)
+      ? selectedName
+      : generated[0].name;
+    elements.savedJobSelect.innerHTML = generated
+      .map((item) => {
+        const isSelected = item.name === selected ? ' selected' : '';
+        return `<option value="${escapeAttribute(item.name)}"${isSelected}>${escapeHtml(item.name)}</option>`;
+      })
+      .join('');
   }
 
-  elements.savedJobSelect.disabled = false;
-  const selected = selectedName && generated.some((item) => item.name === selectedName)
-    ? selectedName
-    : generated[0].name;
-  elements.savedJobSelect.innerHTML = generated
-    .map((item) => {
-      const isSelected = item.name === selected ? ' selected' : '';
-      return `<option value="${escapeAttribute(item.name)}"${isSelected}>${escapeHtml(item.name)}</option>`;
-    })
-    .join('');
+  if (elements.sampleJobSelect) {
+    if (sample.length === 0) {
+      elements.sampleJobSelect.innerHTML = '<option value="">Örnek iş yok</option>';
+      elements.sampleJobSelect.disabled = true;
+    } else {
+      const selectedSample = sample.some((item) => item.name === elements.sampleJobSelect.value)
+        ? elements.sampleJobSelect.value
+        : sample[0].name;
+      elements.sampleJobSelect.disabled = false;
+      elements.sampleJobSelect.innerHTML = sample
+        .map((item) => {
+          const isSelected = item.name === selectedSample ? ' selected' : '';
+          return `<option value="${escapeAttribute(item.name)}"${isSelected}>${escapeHtml(item.name)}</option>`;
+        })
+        .join('');
+    }
+  }
 }
 
 function renderAllSidePanels() {
@@ -5577,9 +6021,11 @@ function renderConnectedResultSystem() {
     return;
   }
 
+  syncResultStageState();
   const outputMeta = getOutputMeta();
+  const variationCount = buildVariationCandidates().length;
   const reviewMeta = [
-    `${Math.max(1, buildVariationCandidates().length)} varyasyon`,
+    `${variationCount} varyasyon`,
     outputMeta.style,
     outputMeta.resolution,
     'sRGB',
@@ -5593,9 +6039,60 @@ function renderConnectedResultSystem() {
 
   elements.reviewSentence.textContent = buildReviewSentence();
   renderCompileInspectPanel();
+  renderResultLifecycleState();
+  renderResultActionState();
   renderVariationStrip();
   renderHeroPreview();
   renderOutputMeta();
+}
+
+function renderResultLifecycleState() {
+  if (!elements.resultLifecycleState || !elements.resultLifecycleLabel || !elements.resultLifecycleHelper) {
+    return;
+  }
+
+  const statusUi = getResultLifecycleUi();
+  elements.resultLifecycleState.classList.remove('is-pending', 'is-running', 'is-succeeded', 'is-failed');
+  elements.resultLifecycleState.classList.add(`is-${statusUi.tone}`);
+  elements.resultLifecycleLabel.textContent = statusUi.label;
+  elements.resultLifecycleHelper.textContent = statusUi.helper;
+}
+
+function renderResultActionState() {
+  const snapshot = getResultLifecycleSnapshot();
+  const loading = Boolean(state.ui.results.outputsLoading || state.busy.batchAction || state.busy.refreshBatches);
+  const hasBatch = Boolean(snapshot.batchName);
+  const canCompare = snapshot.state === 'succeeded' && hasComparableResultCandidates();
+
+  if (elements.compareOutputButton) {
+    elements.compareOutputButton.hidden = !canCompare;
+    elements.compareOutputButton.disabled = loading || !canCompare;
+    elements.compareOutputButton.setAttribute('aria-pressed', state.ui.results.viewMode === 'compare' ? 'true' : 'false');
+    elements.compareOutputButton.classList.toggle('is-active', state.ui.results.viewMode === 'compare');
+  }
+
+  if (elements.approveOutputButton) {
+    const activeItem = getActiveResultOutputItem();
+    elements.approveOutputButton.hidden = false;
+    elements.approveOutputButton.disabled = loading || (snapshot.state === 'succeeded' ? !activeItem?.outputId : !hasBatch);
+    elements.approveOutputButton.textContent = snapshot.state === 'succeeded'
+      ? (activeItem?.is_final ? 'Onaylandı' : 'Onayla')
+      : 'Durumu Kontrol Et';
+  }
+
+  if (elements.downloadOutputButton) {
+    const canDownload = snapshot.state === 'succeeded' && hasBatch && !loading;
+    elements.downloadOutputButton.hidden = snapshot.state !== 'succeeded';
+    elements.downloadOutputButton.disabled = !canDownload;
+    elements.downloadOutputButton.textContent = 'İndir';
+  }
+
+  if (elements.regenerateOutputButton) {
+    const canRetry = hasBatch && (snapshot.state === 'succeeded' || snapshot.state === 'failed');
+    elements.regenerateOutputButton.hidden = !canRetry;
+    elements.regenerateOutputButton.disabled = loading || !canRetry;
+    elements.regenerateOutputButton.textContent = snapshot.state === 'succeeded' ? 'Yeniden Dene' : 'Tekrar Çalıştır';
+  }
 }
 
 function renderCompileInspectPanel() {
@@ -6515,7 +7012,17 @@ function renderVariationStrip() {
     elements.variationCount.textContent = candidates.length > 0 ? `1 / ${candidates.length}` : '0 / 0';
   }
   if (candidates.length === 0) {
-    elements.variationStrip.innerHTML = '<div class="styling-empty-strip">Bir girdi kümesi seçtiğinizde varyasyonlar burada görünür.</div>';
+    const snapshot = getResultLifecycleSnapshot();
+    const emptyText = state.ui.results.outputsLoading
+      ? 'Yerel çıktılar yükleniyor.'
+      : snapshot.state === 'running'
+        ? 'İşlem sürerken hazır çıktılar burada listelenecek.'
+        : snapshot.state === 'succeeded'
+          ? (state.ui.results.outputError || 'Yerel çıktı bulunursa burada listelenecek.')
+          : snapshot.state === 'failed'
+            ? 'Tamamlanamayan bir iş için varyasyon gösterilmez.'
+            : 'Toplu çalışma sonrasında hazır çıktılar burada görünür.';
+    elements.variationStrip.innerHTML = `<div class="styling-empty-strip">${escapeHtml(emptyText)}</div>`;
     return;
   }
 
@@ -6548,23 +7055,44 @@ function renderHeroPreview() {
   }
 
   const active = getActiveVariation();
-  const previewMode = state.ui.results.previewMode === 'output' ? 'output' : 'compare';
-  elements.heroPreviewCompare.classList.toggle('is-output-only', previewMode === 'output');
-  if (elements.compareOutputButton) {
-    elements.compareOutputButton.setAttribute('aria-pressed', previewMode === 'compare' ? 'true' : 'false');
-    elements.compareOutputButton.classList.toggle('is-active', previewMode === 'compare');
-  }
+  const previewMode = normalizeResultViewMode();
+  const primaryInput = getPrimaryInputPreview();
+  const inputNode = active?.inputUrl
+    ? { url: active.inputUrl, name: active.inputName || 'Girdi önizlemesi' }
+    : (primaryInput?.url ? { url: primaryInput.url, name: primaryInput.fileName || 'Girdi önizlemesi' } : null);
+  const showOutput = Boolean(active?.outputUrl) && previewMode !== 'input';
+  const showCompare = showOutput && previewMode === 'compare' && Boolean(active?.inputUrl);
+  const showInputOnly = !showOutput || previewMode === 'input';
+
+  elements.heroPreviewCompare.classList.toggle('is-input-only', showInputOnly);
+  elements.heroPreviewCompare.classList.toggle('is-output-only', !showInputOnly && !showCompare);
 
   if (!active) {
+    const snapshot = getResultLifecycleSnapshot();
     if (elements.heroPreviewLabel) {
-      elements.heroPreviewLabel.textContent = 'Varyasyon 01';
+      elements.heroPreviewLabel.textContent = showInputOnly ? 'Girdi Önizlemesi' : 'Çıktı Önizlemesi';
     }
-    elements.heroBeforeImage.hidden = true;
-    elements.heroBeforeImage.src = '';
+
+    if (inputNode?.url) {
+      elements.heroBeforeImage.src = inputNode.url;
+      elements.heroBeforeImage.alt = inputNode.name;
+      elements.heroBeforeImage.hidden = false;
+      elements.heroBeforeEmpty.hidden = true;
+    } else {
+      elements.heroBeforeImage.hidden = true;
+      elements.heroBeforeImage.src = '';
+      elements.heroBeforeEmpty.hidden = false;
+      elements.heroBeforeEmpty.textContent = 'Girdi önizlemesi bulunamadı.';
+    }
+
     elements.heroAfterImage.hidden = true;
     elements.heroAfterImage.src = '';
-    elements.heroBeforeEmpty.hidden = false;
-    elements.heroAfterEmpty.hidden = false;
+    elements.heroAfterEmpty.hidden = showInputOnly;
+    if (!showInputOnly) {
+      elements.heroAfterEmpty.textContent = snapshot.state === 'succeeded'
+        ? 'Yerel çıktı henüz hazır değil.'
+        : 'Hazır çıktı bulunmuyor.';
+    }
     return;
   }
 
@@ -6572,18 +7100,19 @@ function renderHeroPreview() {
     elements.heroPreviewLabel.textContent = active.title;
   }
 
-  if (active.inputUrl) {
-    elements.heroBeforeImage.src = active.inputUrl;
-    elements.heroBeforeImage.alt = active.inputName || 'Önce önizlemesi';
+  if (inputNode?.url && (showCompare || showInputOnly)) {
+    elements.heroBeforeImage.src = inputNode.url;
+    elements.heroBeforeImage.alt = inputNode.name || 'Girdi önizlemesi';
     elements.heroBeforeImage.hidden = false;
     elements.heroBeforeEmpty.hidden = true;
   } else {
     elements.heroBeforeImage.hidden = true;
     elements.heroBeforeImage.src = '';
-    elements.heroBeforeEmpty.hidden = false;
+    elements.heroBeforeEmpty.hidden = !showCompare;
+    elements.heroBeforeEmpty.textContent = 'Girdi önizlemesi bulunamadı.';
   }
 
-  if (active.outputUrl) {
+  if (showOutput && active.outputUrl) {
     elements.heroAfterImage.src = active.outputUrl;
     elements.heroAfterImage.alt = active.outputName || active.title;
     elements.heroAfterImage.hidden = false;
@@ -6591,7 +7120,8 @@ function renderHeroPreview() {
   } else {
     elements.heroAfterImage.hidden = true;
     elements.heroAfterImage.src = '';
-    elements.heroAfterEmpty.hidden = false;
+    elements.heroAfterEmpty.hidden = showInputOnly;
+    elements.heroAfterEmpty.textContent = 'Hazır çıktı bulunmuyor.';
   }
 }
 
@@ -6728,34 +7258,27 @@ function getPrimaryInputPreview() {
 }
 
 function buildVariationCandidates() {
-  const images = resolveManagedSetImages(getSelectedManagedInputSet());
-  const primary = getPrimaryInputPreview();
-  const seedImages = images.length > 0 ? images : (primary ? [primary] : []);
-  if (seedImages.length === 0) {
+  const items = getResultOutputItems()
+    .filter((item) => Boolean(item?.output?.url));
+  if (items.length === 0) {
     return [];
   }
 
-  const descriptors = [
-    ['Katalog Dengesi', 'Nötr temizlik'],
-    ['Stüdyo Netliği', 'Daha keskin detay'],
-    ['Yumuşak Rötuş', 'Nazik bitiriş'],
-    ['Editoryal Yön', 'Atmosfere yakın kadraj'],
-    ['Detay Koruma', 'Doku korunur'],
-  ];
-  const count = Math.min(5, Math.max(3, seedImages.length));
-
-  return Array.from({ length: count }, (_item, index) => {
-    const input = seedImages[index % seedImages.length];
-    const output = seedImages[(index + 1) % seedImages.length] || input;
-    const [title, meta] = descriptors[index];
+  return items.map((item, index) => {
+    const key = getOutputItemKey(item, index);
     return {
-      key: `variation-${index + 1}`,
-      title,
-      meta,
-      inputUrl: input.url,
-      inputName: input.fileName || `input_${index + 1}`,
-      outputUrl: output.url || input.url,
-      outputName: output.fileName || input.fileName || `output_${index + 1}`,
+      key,
+      title: `Varyasyon ${String(index + 1).padStart(2, '0')}`,
+      meta: item.output?.file || key,
+      inputUrl: item.input?.url || null,
+      inputName: item.input?.file || null,
+      outputUrl: item.output?.url || null,
+      outputName: item.output?.file || key,
+      outputId: item.outputId || null,
+      runId: item.runId || null,
+      batchName: item.batchName || null,
+      reviewState: item.review_state || 'in_review',
+      isFinal: Boolean(item.is_final),
     };
   });
 }
@@ -6765,8 +7288,19 @@ function getActiveVariation(candidates = null) {
   if (items.length === 0) {
     return null;
   }
-  const existing = items.find((item) => item.key === state.ui.results.activeVariationKey);
+  const compareMode = normalizeResultViewMode() === 'compare';
+  const requested = items.find((item) => item.key === state.ui.results.activeVariationKey);
+  const comparable = compareMode
+    ? items.find((item) => item.inputUrl && item.outputUrl) || null
+    : null;
+  const existing = compareMode
+    ? (requested?.inputUrl && requested?.outputUrl ? requested : comparable)
+    : requested;
+
   if (existing) {
+    if (state.ui.results.activeVariationKey !== existing.key) {
+      state.ui.results.activeVariationKey = existing.key;
+    }
     return existing;
   }
   state.ui.results.activeVariationKey = items[0].key;
@@ -7501,7 +8035,11 @@ function createInitialUiState() {
     results: {
       activeVariationKey: '',
       approvedVariationKey: '',
-      previewMode: 'compare',
+      viewMode: 'input',
+      outputBatchName: '',
+      outputItems: [],
+      outputsLoading: false,
+      outputError: '',
     },
   };
 }

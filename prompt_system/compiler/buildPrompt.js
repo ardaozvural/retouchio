@@ -2,17 +2,11 @@ const fs = require('fs');
 const path = require('path');
 
 const order = require('../order');
-const { normalizeJob, resolveEntity } = require('./resolveEntity');
+const { resolveEntity } = require('./resolveEntity');
+const { createReferenceAuthorityState } = require('./referenceAuthority');
 
 function readJson(filePath) {
   return JSON.parse(fs.readFileSync(filePath, 'utf8'));
-}
-
-function clone(value) {
-  if (value === undefined || value === null) {
-    return value;
-  }
-  return JSON.parse(JSON.stringify(value));
 }
 
 function loadCompilerContext(rootDir) {
@@ -27,75 +21,6 @@ function loadCompilerContext(rootDir) {
       outputProfile: 'catalog_4x5_2k',
     },
   };
-}
-
-function footwearUsesReference(mode) {
-  return mode === 'replace';
-}
-
-function headwearUsesReference(mode) {
-  return mode === 'add' || mode === 'replace';
-}
-
-function accessoryUsesReference(mode) {
-  return mode === 'add' || mode === 'replace';
-}
-
-function subjectUsesReference(entity) {
-  return Boolean(entity && entity.source === 'reference' && entity.reference_id);
-}
-
-function usesReferenceAuthority(entity, predicate) {
-  return Boolean(entity && predicate(entity.mode) && entity.source === 'reference' && entity.asset_id);
-}
-
-function stripReferenceAuthority(entity) {
-  if (!entity) {
-    return entity;
-  }
-  return {
-    ...entity,
-    asset_id: null,
-    asset_ids: [],
-  };
-}
-
-function stripSubjectReferenceAuthority(entity) {
-  if (!entity) {
-    return entity;
-  }
-  return {
-    ...entity,
-    reference_id: null,
-    reference_ids: [],
-  };
-}
-
-function buildCompilerIntentJob(canonicalJob) {
-  const compilerJob = clone(canonicalJob);
-  if (!compilerJob?.entities) {
-    return compilerJob;
-  }
-
-  if (!subjectUsesReference(compilerJob.entities.subject)) {
-    compilerJob.entities.subject = stripSubjectReferenceAuthority(compilerJob.entities.subject);
-  }
-
-  if (!usesReferenceAuthority(compilerJob.entities.footwear, footwearUsesReference)) {
-    compilerJob.entities.footwear = stripReferenceAuthority(compilerJob.entities.footwear);
-  }
-
-  if (!usesReferenceAuthority(compilerJob.entities.headwear, headwearUsesReference)) {
-    compilerJob.entities.headwear = stripReferenceAuthority(compilerJob.entities.headwear);
-  }
-
-  compilerJob.entities.accessory.items = Array.isArray(compilerJob.entities.accessory?.items)
-    ? compilerJob.entities.accessory.items.map((item) => (
-      usesReferenceAuthority(item, accessoryUsesReference) ? item : stripReferenceAuthority(item)
-    ))
-    : [];
-
-  return compilerJob;
 }
 
 function formatAccessoryLabel(item) {
@@ -168,12 +93,12 @@ function pushIntentSummary(lines, authorityLine, placementLine) {
   }
 }
 
-function buildIntentBindingSection(canonicalJob) {
+function buildIntentBindingSection(compilerJob) {
   const lines = [];
-  const garment = canonicalJob.entities?.garment || {};
-  const footwear = canonicalJob.entities?.footwear || {};
-  const headwear = canonicalJob.entities?.headwear || {};
-  const accessoryItems = Array.isArray(canonicalJob.entities?.accessory?.items) ? canonicalJob.entities.accessory.items : [];
+  const garment = compilerJob.entities?.garment || {};
+  const footwear = compilerJob.entities?.footwear || {};
+  const headwear = compilerJob.entities?.headwear || {};
+  const accessoryItems = Array.isArray(compilerJob.entities?.accessory?.items) ? compilerJob.entities.accessory.items : [];
   const garmentRefinement = garment.refinement_level === 'repair'
     ? 'repair'
     : (garment.refinement_level === 'minimal' ? 'minimal' : (garment.mode === 'restyle' ? 'repair' : 'preserve'));
@@ -187,7 +112,7 @@ function buildIntentBindingSection(canonicalJob) {
   if (footwear.mode === 'replace') {
     pushIntentSummary(
       lines,
-      usesReferenceAuthority(footwear, footwearUsesReference)
+      footwear.reference_authority_active
         ? 'Footwear: use the referenced product as active authority.'
         : '',
       getPlacementIntentLine('footwear', footwear.placement || 'on_feet')
@@ -197,7 +122,7 @@ function buildIntentBindingSection(canonicalJob) {
   if (headwear.mode === 'add' || headwear.mode === 'replace') {
     pushIntentSummary(
       lines,
-      usesReferenceAuthority(headwear, headwearUsesReference)
+      headwear.reference_authority_active
         ? 'Headwear: use the referenced design as active authority.'
         : '',
       getPlacementIntentLine('headwear', headwear.placement || 'auto')
@@ -210,7 +135,7 @@ function buildIntentBindingSection(canonicalJob) {
     }
     pushIntentSummary(
       lines,
-      usesReferenceAuthority(item, accessoryUsesReference)
+      item.reference_authority_active
         ? `${formatAccessoryLabel(item)}: use the referenced design as active authority.`
         : '',
       getPlacementIntentLine(item.family, item.placement || 'auto')
@@ -228,11 +153,11 @@ function buildIntentBindingSection(canonicalJob) {
   };
 }
 
-function buildReferenceBindingSection(canonicalJob) {
-  const subject = canonicalJob.entities?.subject || {};
+function buildReferenceBindingSection(compilerJob) {
+  const subject = compilerJob.entities?.subject || {};
   const lines = [];
 
-  if (subject.mode === 'transfer_identity') {
+  if (subject.mode === 'transfer_identity' && subject.reference_authority_active) {
     lines.push(
       'Subject reference = facial identity authority.',
       'Target image = body authority.',
@@ -250,29 +175,29 @@ function buildReferenceBindingSection(canonicalJob) {
       'Target image = garment authority.',
       'Target image = scene continuity authority.'
     );
-    if (subjectUsesReference(subject)) {
+    if (subject.reference_authority_active) {
       lines.push('Subject references, if present, are supporting-only and not replacement identity authority.');
     }
   }
 
-  if ((canonicalJob.entities.garment.detail_refs?.material || []).length > 0) {
+  if ((compilerJob.entities?.garment?.detail_refs?.material || []).length > 0) {
     lines.push('Garment material refs = texture, surface, stitching, and close-up detail fidelity authority.');
   }
 
-  if ((canonicalJob.entities.garment.detail_refs?.pattern || []).length > 0) {
+  if ((compilerJob.entities?.garment?.detail_refs?.pattern || []).length > 0) {
     lines.push('Garment pattern refs = pattern, print, writing, geometry, scale, and placement authority.');
   }
 
-  if (usesReferenceAuthority(canonicalJob.entities.footwear, footwearUsesReference)) {
+  if (compilerJob.entities?.footwear?.reference_authority_active) {
     lines.push('Footwear refs = locked design authority for footwear only.');
   }
 
-  if (usesReferenceAuthority(canonicalJob.entities.headwear, headwearUsesReference)) {
+  if (compilerJob.entities?.headwear?.reference_authority_active) {
     lines.push('Headwear refs = locked design authority for headwear only.');
   }
 
-  const accessoryItems = canonicalJob.entities.accessory.items || [];
-  if (accessoryItems.some((item) => usesReferenceAuthority(item, accessoryUsesReference))) {
+  const accessoryItems = compilerJob.entities?.accessory?.items || [];
+  if (accessoryItems.some((item) => item?.reference_authority_active)) {
     lines.push('Accessory refs = locked design authority for their own item only; never identity authority.');
   }
 
@@ -303,10 +228,9 @@ function buildPrompt(jobInput, options = {}) {
   const rootDir = options.rootDir || path.resolve(__dirname, '..', '..');
   const rawJob = loadJob(jobInput);
   const context = loadCompilerContext(rootDir);
-  const canonicalJob = normalizeJob(rawJob, {
-    defaultOutputProfile: context.defaults.outputProfile,
-  });
-  const compilerJob = buildCompilerIntentJob(canonicalJob);
+  const authorityState = createReferenceAuthorityState(rawJob);
+  const canonicalJob = authorityState.canonicalJob;
+  const compilerJob = authorityState.compilerJob;
 
   const sections = [];
 
@@ -325,7 +249,7 @@ function buildPrompt(jobInput, options = {}) {
     sections.push(...compiledSections);
   }
 
-  const intentBindingSection = buildIntentBindingSection(canonicalJob);
+  const intentBindingSection = buildIntentBindingSection(compilerJob);
   if (intentBindingSection) {
     sections.push(intentBindingSection);
   }
@@ -346,6 +270,7 @@ function buildPrompt(jobInput, options = {}) {
     canonicalJob,
     sections,
     imageConfig,
+    authority: authorityState.report,
   };
 }
 
