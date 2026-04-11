@@ -3,7 +3,16 @@ node_modules/
 .DS_Store
 ._*
 .env
+
+# Runtime and local output directories
 batch_output/
 batch_input/
 input_cmpltd/
-data/batches/*.manifest.json
+inputs/
+refs/
+jobs/generated/
+data/batches/
+
+# Local run artifacts
+batch_requests.jsonl
+*.log
